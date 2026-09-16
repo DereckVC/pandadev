@@ -295,13 +295,50 @@ export default function Projects({ projects: initialProjects = fallbackProjects 
   const [catalog, setCatalog] = useState(() => initialProjects.map(normalizeProject))
 
   useEffect(() => {
-    // timestamp evita que el navegador sirva una versión en caché antigua
-    fetch(`${projectsApi}/projects?t=${Date.now()}`)
-      .then((response) => response.ok ? response.json() : Promise.reject(new Error('Projects API unavailable')))
-      .then((items) => {
-        if (Array.isArray(items) && items.length > 0) setCatalog(items.map(normalizeProject))
-      })
-      .catch(() => {})
+    let isMounted = true
+
+    // Función que sincroniza los proyectos silenciosamente
+    const fetchLatestProjects = () => {
+      fetch(`${projectsApi}/projects?t=${Date.now()}`)
+        .then((response) => response.ok ? response.json() : Promise.reject(new Error('Projects API unavailable')))
+        .then((items) => {
+          if (!isMounted || !Array.isArray(items) || items.length === 0) return
+          const normalized = items.map(normalizeProject)
+          setCatalog(normalized)
+
+          // Si el usuario tiene el modal de un proyecto abierto, se actualiza también en vivo
+          setSelectedProject((current) => {
+            if (!current) return null
+            const match = normalized.find((p) => p.id === current.id || (p._id && p._id === current._id))
+            return match || current
+          })
+        })
+        .catch(() => {})
+    }
+
+    // 1. Carga inmediata al entrar
+    fetchLatestProjects()
+
+    // 2. Intervalo periódico en segundo plano (cada 8 segundos)
+    const intervalId = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchLatestProjects()
+      }
+    }, 8000)
+
+    // 3. Si el usuario cambia de pestaña y regresa, actualiza al instante
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchLatestProjects()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      isMounted = false
+      clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [])
 
   const filteredProjects = useMemo(() => activeCategory === 'Todos'
