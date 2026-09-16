@@ -10,28 +10,44 @@ const { requireAuth } = require('../middleware/auth');
 const { sendPasswordResetEmail, sendOTPEmail } = require('../utils/mailer');
 
 const router = express.Router();
-const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+// Helper dinámico: si no existe FRONTEND_URL, apunta directo a tu dominio de producción
+const getFrontendUrl = () => (process.env.FRONTEND_URL || 'https://www.pandadev.me').replace(/\/+$/, '');
+
+// Configuración de cookies: 'none' + secure para comunicación cruzada (Render <-> pandadev.me)
+const isProduction = process.env.NODE_ENV === 'production' || (process.env.FRONTEND_URL && !process.env.FRONTEND_URL.includes('localhost'));
+
+const cookieOptions = {
+  httpOnly: true,
+  sameSite: isProduction ? 'none' : 'lax',
+  secure: isProduction,
+  maxAge: 7 * 24 * 60 * 60 * 1000
+};
+
 const CANONICAL_ADMIN_EMAILS = Object.freeze(['minombrexd158@gmail.com', 'i2611843@continental.edu.pe']);
 const CANONICAL_ADMIN_GITHUB = 'DereckVC';
 const jwtSecret = () => process.env.JWT_SECRET || 'pandadev-development-secret';
 const publicUser = (user) => ({ id: user.id, email: user.email, name: user.name, avatar: user.avatar, provider: user.provider, githubUsername: user.githubUsername, discordTag: user.discordTag || '', role: user.role, isVerified: user.isVerified, twoFactorEnabled: user.twoFactorEnabled });
 const createToken = (user) => jwt.sign({ id: user.id, role: user.role }, jwtSecret(), { expiresIn: '7d' });
+
 const sendSession = (res, user, redirect = false) => {
   const token = createToken(user);
-  res.cookie('token', token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000 });
-  // OAuth uses the httpOnly cookie; never leak the JWT in a query string or referrer.
-  if (redirect) return res.redirect(`${frontendUrl}?login=success`);
+  res.cookie('token', token, cookieOptions);
+  if (redirect) return res.redirect(`${getFrontendUrl()}/?login=success`);
   return res.json({ token, user: publicUser(user) });
 };
+
 const createOtp = () => String(Math.floor(100000 + Math.random() * 900000));
 const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
 const trustedDeviceSecret = () => process.env.JWT_SECRET || 'pandadev-development-secret';
+
 const createTrustedDevice = (email, deviceId) => {
   const expires = Date.now() + 30 * 24 * 60 * 60 * 1000;
   const payload = `${email}:${deviceId}:${expires}`;
   const signature = crypto.createHmac('sha256', trustedDeviceSecret()).update(payload).digest('hex');
   return `${expires}.${signature}`;
 };
+
 const isTrustedDevice = (email, deviceId, token) => {
   if (!deviceId || !token) return false;
   const [expires, signature] = token.split('.');
@@ -85,7 +101,7 @@ router.post('/verify-otp', async (req, res) => {
   user.otpCode = null;
   user.otpExpires = null;
   await user.save();
-  if (req.body.rememberDevice && req.body.deviceId) res.cookie('trusted_device', createTrustedDevice(user.email, req.body.deviceId), { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 30 * 24 * 60 * 60 * 1000 });
+  if (req.body.rememberDevice && req.body.deviceId) res.cookie('trusted_device', createTrustedDevice(user.email, req.body.deviceId), { ...cookieOptions, maxAge: 30 * 24 * 60 * 60 * 1000 });
   return sendSession(res, user);
 });
 
@@ -95,7 +111,7 @@ router.post('/verify-login-otp', async (req, res) => {
   user.otpCode = null;
   user.otpExpires = null;
   await user.save();
-  if (req.body.rememberDevice && req.body.deviceId) res.cookie('trusted_device', createTrustedDevice(user.email, req.body.deviceId), { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 30 * 24 * 60 * 60 * 1000 });
+  if (req.body.rememberDevice && req.body.deviceId) res.cookie('trusted_device', createTrustedDevice(user.email, req.body.deviceId), { ...cookieOptions, maxAge: 30 * 24 * 60 * 60 * 1000 });
   return sendSession(res, user);
 });
 
@@ -114,7 +130,7 @@ router.post('/verify-2fa-login', async (req, res) => {
   const user = await User.findById(req.body.userId).select('+twoFactorSecret');
   const valid = user && user.twoFactorEnabled && user.twoFactorSecret && speakeasy.totp.verify({ secret: user.twoFactorSecret, encoding: 'base32', token: String(req.body.token || '').trim(), window: 1 });
   if (!valid) return res.status(401).json({ message: 'El código de autenticación no es válido.' });
-  if (req.body.rememberDevice && req.body.deviceId) res.cookie('trusted_device', createTrustedDevice(user.email, req.body.deviceId), { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 30 * 24 * 60 * 60 * 1000 });
+  if (req.body.rememberDevice && req.body.deviceId) res.cookie('trusted_device', createTrustedDevice(user.email, req.body.deviceId), { ...cookieOptions, maxAge: 30 * 24 * 60 * 60 * 1000 });
   return sendSession(res, user);
 });
 
@@ -124,13 +140,17 @@ router.put('/me', requireAuth, async (req, res) => {
     const updates = {};
     if (typeof req.body.name === 'string') updates.name = req.body.name.trim().slice(0, 80);
     if (typeof req.body.discordTag === 'string') updates.discordTag = req.body.discordTag.trim().slice(0, 80);
-    const user = await User.findByIdAndUpdate(req.user.id, updates, { new: true, runValidators: true });
+    const user = await User.findByIdAndUpdate(req.user.id, updates, { returnDocument: 'after', runValidators: true });
     return res.json({ user: publicUser(user) });
   } catch (error) {
     return res.status(400).json({ message: 'Unable to update profile' });
   }
 });
-router.post('/logout', (req, res) => { res.clearCookie('token'); return res.json({ message: 'Logged out' }); });
+
+router.post('/logout', (req, res) => { 
+  res.clearCookie('token', cookieOptions); 
+  return res.json({ message: 'Logged out' }); 
+});
 
 router.post('/2fa/generate', requireAuth, async (req, res) => {
   const secret = speakeasy.generateSecret({ name: `PandaDev (${req.user.email})` });
@@ -234,17 +254,25 @@ router.put('/change-password', requireAuth, async (req, res) => {
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   passport.use(new (require('passport-google-oauth20').Strategy)({ clientID: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET, callbackURL: process.env.GOOGLE_CALLBACK_URL }, async (accessToken, refreshToken, profile, done) => { try { done(null, await upsertOAuthUser(profile, 'google')); } catch (error) { done(error); } }));
   router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'], session: false }));
-  router.get('/google/callback', passport.authenticate('google', { session: false, failureRedirect: `${frontendUrl}/?auth_error=google` }), (req, res) => sendSession(res, req.user, true));
+  router.get('/google/callback', (req, res, next) => {
+    passport.authenticate('google', { session: false, failureRedirect: `${getFrontendUrl()}/?auth_error=google` }, (err, user) => {
+      if (err || !user) return res.redirect(`${getFrontendUrl()}/?auth_error=google`);
+      return sendSession(res, user, true);
+    })(req, res, next);
+  });
 }
 
 if (process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET) {
   passport.use(new (require('passport-discord').Strategy)({ clientID: process.env.DISCORD_CLIENT_ID, clientSecret: process.env.DISCORD_CLIENT_SECRET, callbackURL: process.env.DISCORD_CALLBACK_URL, scope: ['identify', 'email'] }, async (accessToken, refreshToken, profile, done) => { try { done(null, await upsertOAuthUser(profile, 'discord')); } catch (error) { done(error); } }));
   router.get('/discord', passport.authenticate('discord', { session: false }));
-  router.get('/discord/callback', passport.authenticate('discord', { session: false, failureRedirect: `${frontendUrl}/?auth_error=discord` }), (req, res) => sendSession(res, req.user, true));
+  router.get('/discord/callback', (req, res, next) => {
+    passport.authenticate('discord', { session: false, failureRedirect: `${getFrontendUrl()}/?auth_error=discord` }, (err, user) => {
+      if (err || !user) return res.redirect(`${getFrontendUrl()}/?auth_error=discord`);
+      return sendSession(res, user, true);
+    })(req, res, next);
+  });
 }
 
-// GitHub endpoints are deliberately registered in every environment. In development,
-// missing credentials use an explicit local identity; production fails loudly instead.
 const githubConfigured = Boolean(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET);
 if (githubConfigured) {
   const GitHubStrategy = require('passport-github2').Strategy;
@@ -257,7 +285,12 @@ if (githubConfigured) {
     try { done(null, await upsertOAuthUser(profile, 'github')); } catch (error) { done(error); }
   }));
   router.get('/github', passport.authenticate('github', { scope: ['user:email', 'read:user'], session: false }));
-  router.get('/github/callback', passport.authenticate('github', { session: false, failureRedirect: `${frontendUrl}/?auth_error=github` }), (req, res) => sendSession(res, req.user, true));
+  router.get('/github/callback', (req, res, next) => {
+    passport.authenticate('github', { session: false, failureRedirect: `${getFrontendUrl()}/?auth_error=github` }, (err, user) => {
+      if (err || !user) return res.redirect(`${getFrontendUrl()}/?auth_error=github`);
+      return sendSession(res, user, true);
+    })(req, res, next);
+  });
 } else {
   router.get('/github', async (req, res) => {
     if (process.env.NODE_ENV === 'production') return res.status(503).json({ message: 'GitHub OAuth is not configured' });
@@ -265,14 +298,14 @@ if (githubConfigured) {
       const user = await User.findOneAndUpdate(
         { email: 'minombrexd158@gmail.com' },
         { $set: { role: 'admin', provider: 'github', githubUsername: 'DereckVC' }, $setOnInsert: { name: 'DereckVC', avatar: '' } },
-        { new: true, upsert: true, setDefaultsOnInsert: true },
+        { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true },
       );
       return sendSession(res, user, true);
     } catch (error) { return res.status(503).json({ message: 'Demo authentication is unavailable' }); }
   });
   router.get('/github/callback', (req, res) => {
     if (process.env.NODE_ENV === 'production') return res.status(503).json({ message: 'GitHub OAuth is not configured' });
-    return res.redirect(`${frontendUrl}?login=success`);
+    return res.redirect(`${getFrontendUrl()}/?login=success`);
   });
 }
 
