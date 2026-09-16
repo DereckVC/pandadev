@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight, ArrowUpRight, Grid2X2, List, X } from 'lucide-re
 import ProviderIcon from '../components/ProviderIcon'
 import { useLanguage } from '../contexts/LanguageContext'
 
-const projects = [
+const fallbackProjects = [
   {
     id: 'pandacraft-tools',
     title: 'PandaCraft Tools',
@@ -91,6 +91,33 @@ const projects = [
 ]
 
 const categories = ['Todos', 'Webs', 'Sistemas', 'Roblox / Luau', 'Minecraft Tools', 'Bots']
+
+const projectsApi = (() => {
+  const raw = import.meta.env.VITE_API_URL || '/api'
+  return raw.endsWith('/api') ? raw : `${raw.replace(/\/+$/, '')}/api`
+})()
+
+const normalizeProject = (item, index) => {
+  const fallback = fallbackProjects[index % fallbackProjects.length]
+  const shortDesc = typeof item.shortDesc === 'object' ? (item.shortDesc.es || item.shortDesc.en || '') : item.shortDesc
+  const longDesc = typeof item.longDesc === 'object' ? (item.longDesc.es || item.longDesc.en || '') : item.longDesc
+  return {
+    ...fallback,
+    ...item,
+    id: item._id || item.slug || fallback.id,
+    types: item.types?.length ? item.types : [item.category || 'Webs'],
+    summary: shortDesc || item.description || fallback.summary,
+    vision: longDesc || item.description || fallback.vision,
+    goals: item.goals || fallback.goals,
+    inspiration: item.inspiration || fallback.inspiration,
+    team: item.team || fallback.team,
+    architecture: item.architecture || fallback.architecture,
+    images: item.images?.length ? item.images : (item.screenshots?.length ? item.screenshots : [item.bannerUrl || fallback.images[0]]),
+    tags: item.tags?.length ? item.tags : fallback.tags,
+    githubUrl: item.githubUrl || item.repoUrl || '',
+    githubVisible: item.githubVisible ?? item.showGithubBtn ?? true,
+  }
+}
 
 const translations = {
   es: {
@@ -279,16 +306,26 @@ function ProjectModal({ project, text, onClose }) {
   </div>
 }
 
-export default function Projects() {
+export default function Projects({ projects: initialProjects = fallbackProjects }) {
   const { language } = useLanguage()
   const text = translations[language] || translations.es
   const [activeCategory, setActiveCategory] = useState('Todos')
   const [viewMode, setViewMode] = useState('grid')
   const [selectedProject, setSelectedProject] = useState(null)
+  const [catalog, setCatalog] = useState(() => initialProjects.map(normalizeProject))
+
+  useEffect(() => {
+    fetch(`${projectsApi}/projects`)
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('Projects API unavailable')))
+      .then((items) => {
+        if (Array.isArray(items) && items.length > 0) setCatalog(items.map(normalizeProject))
+      })
+      .catch(() => {})
+  }, [])
 
   const filteredProjects = useMemo(() => activeCategory === 'Todos'
-    ? projects
-    : projects.filter((project) => project.types.includes(activeCategory)), [activeCategory])
+    ? catalog
+    : catalog.filter((project) => project.types.includes(activeCategory)), [activeCategory, catalog])
 
   return <main className="projects-page">
     <header className="w-full max-w-7xl mx-auto px-6 lg:px-12 pt-10 pb-6 flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -299,7 +336,7 @@ export default function Projects() {
       </div>
       <div className="px-5 py-3 rounded-2xl bg-[#0d0d14]/90 border border-[#8b5cf6]/40 shadow-[0_0_20px_rgba(139,92,246,0.2)] flex items-center gap-3">
         <span className="text-emerald-400 animate-pulse">●</span>
-        <span className="font-mono text-sm text-neutral-200">{projects.length} {text.published}</span>
+        <span className="font-mono text-sm text-neutral-200">{catalog.length} {text.published}</span>
       </div>
     </header>
 
