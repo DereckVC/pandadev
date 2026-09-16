@@ -7,6 +7,11 @@ const emptyProject = { title: '', slug: '', shortDesc: '', category: 'Web', tags
 
 export default function Admin() {
   const { user, api } = useAuth()
+  const apiBase = api.endsWith('/api') ? api : `${api.replace(/\/+$/, '')}/api`
+  const authHeaders = () => ({
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${localStorage.getItem('panda_token') || ''}`,
+  })
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('overview')
   const [stats, setStats] = useState(null)
@@ -26,11 +31,11 @@ export default function Admin() {
     }
     const load = async () => {
       try {
-        const requests = await Promise.all(['stats', 'users'].map((path) => fetch(`${api}/admin/${path}`, { credentials: 'include' })))
+        const requests = await Promise.all(['stats', 'users'].map((path) => fetch(`${apiBase}/admin/${path}`, { credentials: 'include', headers: authHeaders() })))
         const data = await Promise.all(requests.map((response) => response.ok ? response.json() : Promise.reject(new Error('No se pudo cargar el panel'))))
         setStats(data[0])
         setUsers(data[1])
-        const [projectsResponse, messagesResponse] = await Promise.all([fetch(`${api}/admin/projects`, { credentials: 'include' }), fetch(`${api}/contact`, { credentials: 'include' })])
+        const [projectsResponse, messagesResponse] = await Promise.all([fetch(`${apiBase}/admin/projects`, { credentials: 'include', headers: authHeaders() }), fetch(`${apiBase}/contact`, { credentials: 'include', headers: authHeaders() })])
         if (!projectsResponse.ok || !messagesResponse.ok) throw new Error('No se pudieron cargar los datos del panel')
         setProjects(await projectsResponse.json())
         setMessages(await messagesResponse.json())
@@ -39,20 +44,20 @@ export default function Admin() {
       }
     }
     load()
-  }, [api, navigate, user])
+  }, [apiBase, navigate, user])
 
   const loadProjects = async () => {
-    const response = await fetch(`${api}/admin/projects`, { credentials: 'include' })
+    const response = await fetch(`${apiBase}/admin/projects`, { credentials: 'include', headers: authHeaders() })
     if (!response.ok) throw new Error('No se pudieron cargar los proyectos')
     setProjects(await response.json())
   }
   const loadMessages = async () => {
-    const response = await fetch(`${api}/contact`, { credentials: 'include' })
+    const response = await fetch(`${apiBase}/contact`, { credentials: 'include', headers: authHeaders() })
     if (!response.ok) throw new Error('No se pudieron cargar los mensajes')
     setMessages(await response.json())
   }
   const request = async (url, options = {}) => {
-    const response = await fetch(`${api}${url}`, { credentials: 'include', headers: { 'Content-Type': 'application/json' }, ...options })
+    const response = await fetch(`${apiBase}${url}`, { credentials: 'include', ...options, headers: { ...authHeaders(), ...(options.headers || {}) } })
     const data = await response.json()
     if (!response.ok) throw new Error(data.message || 'La operación no se pudo completar')
     return data

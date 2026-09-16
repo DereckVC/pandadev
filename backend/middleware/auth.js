@@ -3,7 +3,14 @@ const User = require('../models/User');
 const ADMIN_EMAIL = 'minombrexd158@gmail.com';
 const ADMIN_GITHUB_USERNAME = 'DereckVC';
 
-const getToken = (req) => req.cookies?.token || req.header('authorization')?.replace('Bearer ', '');
+const getToken = (req) => {
+  const authorization = req.get('Authorization');
+  if (authorization) {
+    const match = authorization.match(/^Bearer\s+(.+)$/i);
+    if (match) return match[1].trim();
+  }
+  return req.cookies?.token;
+};
 
 const requireAuth = async (req, res, next) => {
   try {
@@ -21,7 +28,7 @@ const requireAuth = async (req, res, next) => {
 const requireAdmin = (req, res, next) => {
   if (process.env.ADMIN_TOKEN && req.header('x-admin-token') === process.env.ADMIN_TOKEN) return next();
   return requireAuth(req, res, () => {
-    const isAdmin = req.user.email === ADMIN_EMAIL || req.user.githubUsername === ADMIN_GITHUB_USERNAME;
+    const isAdmin = req.user.role === 'admin' || req.user.email === ADMIN_EMAIL || req.user.githubUsername === ADMIN_GITHUB_USERNAME;
     if (!isAdmin) return res.status(403).json({ message: 'Admin role required' });
     return next();
   });
