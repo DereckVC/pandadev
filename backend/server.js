@@ -20,27 +20,41 @@ const port = process.env.PORT || 5000;
 // Requerido en Render para detectar la IP real del visitante detrás del proxy inverso
 app.set('trust proxy', 1);
 
-// Lista blanca de dominios autorizados
+// Lista blanca flexible con soporte para www, apex y previews
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
-  'https://pandadev-beta.vercel.app',
+  'http://localhost:3000',
   'https://pandadev.me',
+  'https://www.pandadev.me',
+  'https://pandadev-beta.vercel.app',
   process.env.FRONTEND_URL
-].filter(Boolean);
+].filter(Boolean).map(url => url.replace(/\/+$/, ''));
 
-app.use(cors({
+const corsOptions = {
   origin: (origin, callback) => {
-    // Permite peticiones sin 'origin' (móviles, Postman o Render health check) y dominios de la lista
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error(`Bloqueado por política CORS: ${origin}`));
-    }
-  },
-  credentials: true
-}));
+    // Permite peticiones sin 'origin' (móviles, curl o Render health checks)
+    if (!origin) return callback(null, true);
 
+    const cleanOrigin = origin.replace(/\/+$/, '');
+    const isAllowed = allowedOrigins.includes(cleanOrigin) ||
+      cleanOrigin.endsWith('pandadev.me') ||
+      cleanOrigin.endsWith('.vercel.app');
+
+    if (isAllowed) {
+      return callback(null, true);
+    }
+    
+    // Rechazo limpio sin detonar un Error 500 en preflight
+    return callback(null, false);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-device-id'],
+  optionsSuccessStatus: 204
+};
+
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
 app.use(passport.initialize());
@@ -105,7 +119,6 @@ app.post('/api/admin/projects', requireAdmin, async (req, res) => {
   catch (error) { return res.status(400).json({ message: error.code === 11000 ? 'Slug already exists' : 'Invalid project data' }); }
 });
 
-// Actualizado a returnDocument: 'after' para eliminar advertencias de Mongoose
 app.put('/api/admin/projects/:id', requireAdmin, async (req, res) => {
   try { 
     const project = await Project.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after', runValidators: true }); 
@@ -127,7 +140,6 @@ app.get('/api/admin/github/repos', requireAdmin, async (req, res) => {
   } catch (error) { return res.status(502).json({ message: 'Unable to reach GitHub' }); }
 });
 
-// Actualizado a returnDocument: 'after' para evitar warnings durante la sincronización
 app.post('/api/admin/github/sync', requireAdmin, async (req, res) => {
   try {
     const response = await fetch(`https://api.github.com/users/${process.env.GITHUB_USERNAME || 'DereckVC'}/repos?per_page=100&sort=updated`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'PandaDev-Admin' } });
