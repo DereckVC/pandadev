@@ -16,9 +16,31 @@ const { requireAdmin } = require('./middleware/auth');
 
 const app = express();
 const port = process.env.PORT || 5000;
-const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
 
-app.use(cors({ origin: frontendUrl, credentials: true }));
+// Requerido en Render para detectar la IP real del visitante detrás del proxy inverso
+app.set('trust proxy', 1);
+
+// Lista blanca de dominios autorizados
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'https://pandadev-beta.vercel.app',
+  'https://pandadev.me',
+  process.env.FRONTEND_URL
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Permite peticiones sin 'origin' (móviles, Postman o Render health check) y dominios de la lista
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`Bloqueado por política CORS: ${origin}`));
+    }
+  },
+  credentials: true
+}));
+
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
 app.use(passport.initialize());
@@ -82,10 +104,16 @@ app.post('/api/admin/projects', requireAdmin, async (req, res) => {
   try { return res.status(201).json(await Project.create(req.body)); }
   catch (error) { return res.status(400).json({ message: error.code === 11000 ? 'Slug already exists' : 'Invalid project data' }); }
 });
+
+// Actualizado a returnDocument: 'after' para eliminar advertencias de Mongoose
 app.put('/api/admin/projects/:id', requireAdmin, async (req, res) => {
-  try { const project = await Project.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true }); return project ? res.json(project) : res.status(404).json({ message: 'Project not found' }); }
+  try { 
+    const project = await Project.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after', runValidators: true }); 
+    return project ? res.json(project) : res.status(404).json({ message: 'Project not found' }); 
+  }
   catch (error) { return res.status(400).json({ message: 'Invalid project data' }); }
 });
+
 app.delete('/api/admin/projects/:id', requireAdmin, async (req, res) => {
   try { const project = await Project.findByIdAndDelete(req.params.id); return project ? res.json({ message: 'Project deleted' }) : res.status(404).json({ message: 'Project not found' }); }
   catch (error) { return res.status(400).json({ message: 'Invalid project id' }); }
@@ -99,8 +127,7 @@ app.get('/api/admin/github/repos', requireAdmin, async (req, res) => {
   } catch (error) { return res.status(502).json({ message: 'Unable to reach GitHub' }); }
 });
 
-// Import public repositories as editable projects. Existing records are updated by
-// githubId so synchronizing is idempotent and never creates duplicates.
+// Actualizado a returnDocument: 'after' para evitar warnings durante la sincronización
 app.post('/api/admin/github/sync', requireAdmin, async (req, res) => {
   try {
     const response = await fetch(`https://api.github.com/users/${process.env.GITHUB_USERNAME || 'DereckVC'}/repos?per_page=100&sort=updated`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'PandaDev-Admin' } });
@@ -122,7 +149,7 @@ app.post('/api/admin/github/sync', requireAdmin, async (req, res) => {
         order: index,
         isPublic: true,
       },
-      { new: true, upsert: true, setDefaultsOnInsert: true, runValidators: true },
+      { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true, runValidators: true },
     )));
     return res.json({ count: imported.length, projects: imported });
   } catch (error) { return res.status(502).json({ message: 'Unable to synchronize GitHub repositories' }); }
