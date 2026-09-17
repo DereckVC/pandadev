@@ -76,7 +76,7 @@ const isTrustedDevice = (email, deviceId, token) => {
   return signature?.length === expected.length && crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 };
 
-// Registro local con verificación OTP
+// Registro local con verificación OTP por correo
 router.post('/register', async (req, res) => {
   try {
     const rawEmail = req.body.email || req.body.mail;
@@ -109,7 +109,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// Login directo con correo y contraseña (requiere 2FA Authenticator solo si está activo)
+// Login directo (pide 2FA Authenticator solo si fue activado en el perfil)
 router.post('/login', async (req, res) => {
   const rawEmail = req.body.email || req.body.mail;
   const email = rawEmail ? String(rawEmail).trim().toLowerCase() : '';
@@ -125,7 +125,6 @@ router.post('/login', async (req, res) => {
     return res.json({ success: true, require2FA: true, userId: user._id, email: user.email });
   }
 
-  // Inicio de sesión directo sin bloqueos
   return sendSession(res, user);
 });
 
@@ -240,7 +239,6 @@ router.post('/2fa/disable', requireAuth, async (req, res) => {
   return res.json({ user: publicUser(user) });
 });
 
-// Recuperación de contraseña
 router.post('/forgot-password', async (req, res) => {
   try {
     const rawEmail = req.body.email || req.body.mail;
@@ -274,7 +272,6 @@ router.post('/forgot-password', async (req, res) => {
   }
 });
 
-// Restablecimiento de contraseña con envío de confirmación de seguridad
 router.post('/reset-password/:token', async (req, res) => {
   try {
     if (!req.body.password || !passwordRegex.test(req.body.password)) {
@@ -295,7 +292,6 @@ router.post('/reset-password/:token', async (req, res) => {
     user.isVerified = true;
     await user.save();
 
-    // Notificación automática al usuario por motivos de seguridad
     sendPasswordChangedEmail(user.email)
       .then((ok) => {
         if (ok) console.log('✓ Notificación de cambio de clave enviada a:', user.email);

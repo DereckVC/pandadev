@@ -2,19 +2,20 @@ import { useState } from 'react'
 import { ArrowUpRight, Check, Copy, Mail, Send } from 'lucide-react'
 import { useLanguage } from '../contexts/LanguageContext'
 
-// Resuelve dinámicamente la URL oficial del backend con el prefijo /api
+// Resuelve dinámicamente la URL oficial evitando caídas a rutas relativas sin backend
 const getApiUrl = () => {
-  const raw = import.meta.env.VITE_API_URL || '/api'
-  return raw.endsWith('/api') ? raw : `${raw.replace(/\/+$/, '')}/api`
+  const envUrl = import.meta.env.VITE_API_URL
+  if (envUrl) {
+    return envUrl.endsWith('/api') ? envUrl : `${envUrl.replace(/\/+$/, '')}/api`
+  }
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+    return 'https://pandadev-api.onrender.com/api'
+  }
+  return 'http://localhost:5000/api'
 }
+
 const CONTACT_API = `${getApiUrl()}/contact`
-
-// Canal oficial único de soporte y contacto
 const supportEmail = 'support@pandadev.me'
-// Reemplaza este enlace por la invitación permanente a tu servidor de Discord
-const discordServerUrl = 'https://discord.gg/pandadev'
-const githubProfileUrl = 'https://github.com/DereckVC'
-
 const initialForm = { name: '', email: '', category: 'Desarrollo Web MERN', message: '' }
 
 const content = {
@@ -25,7 +26,7 @@ const content = {
     subtitle: '¿Tienes un proyecto en mente, buscas desarrollo en Roblox Studio o requieres una herramienta web? Conversemos por cualquiera de estos canales.',
     discordTitle: 'Discord Server & DM',
     discordText: 'Consultas técnicas rápidas, comunidad y soporte directo para tus ideas.',
-    discordButton: 'Entrar al Servidor',
+    discordButton: 'Abrir Discord',
     githubTitle: 'GitHub Workspace',
     githubText: 'Código abierto, utilidades y proyectos que evolucionan con cada iteración.',
     githubButton: 'Ver repositorios',
@@ -47,7 +48,7 @@ const content = {
     categories: ['Desarrollo Web MERN', 'Roblox Studio / Luau', 'Bot / Automatización', 'Consulta General'],
     submit: 'Enviar Mensaje Directo',
     sending: 'Enviando...',
-    success: '¡Mensaje recibido! Te hemos enviado un acuse de recibo a tu correo.',
+    success: '¡Mensaje recibido! Te responderé pronto a tu correo.',
     error: 'No se pudo enviar el mensaje. Inténtalo de nuevo.',
   },
   en: {
@@ -57,7 +58,7 @@ const content = {
     subtitle: 'Have a project in mind, need Roblox Studio development or a web tool? Let’s talk through any of these channels.',
     discordTitle: 'Discord Server & DM',
     discordText: 'Fast technical questions, community and direct support for your ideas.',
-    discordButton: 'Join Server',
+    discordButton: 'Open Discord',
     githubTitle: 'GitHub Workspace',
     githubText: 'Open source code, utilities and projects evolving with every iteration.',
     githubButton: 'View repositories',
@@ -68,7 +69,7 @@ const content = {
     copy: 'Copy',
     copied: 'Copied!',
     formTitle: 'Send a Direct Message',
-    formSubtitle: 'Complete the details and you will receive an immediate confirmation email.',
+    formSubtitle: 'Complete the details and receive an immediate confirmation in your email.',
     name: 'Name / Organization',
     namePlaceholder: 'Your name or company',
     email: 'Your Email',
@@ -79,7 +80,7 @@ const content = {
     categories: ['MERN Web Development', 'Roblox Studio / Luau', 'Bot / Automation', 'General Inquiry'],
     submit: 'Send Direct Message',
     sending: 'Sending...',
-    success: 'Message received! An automated receipt has been sent to your email.',
+    success: 'Message received! I will reply to your email soon.',
     error: 'The message could not be sent. Please try again.',
   },
 }
@@ -142,9 +143,11 @@ export default function Contact() {
   }
 
   return (
-    <main className="w-full max-w-6xl mx-auto px-6 lg:px-12 py-12">
+    <main className="w-full max-w-6xl mx-auto px-6 lg:px-12 py-12 select-none">
       <header className="max-w-3xl">
-        <span className="inline-flex rounded-full border border-[#8b5cf6]/40 bg-[#8b5cf6]/10 px-4 py-2 font-mono text-[10px] tracking-[0.14em] text-[#c4b5fd]">{text.badge}</span>
+        <span className="inline-flex rounded-full border border-[#8b5cf6]/40 bg-[#8b5cf6]/10 px-4 py-2 font-mono text-[10px] tracking-[0.14em] text-[#c4b5fd]">
+          {text.badge}
+        </span>
         <h1 className="mt-6 text-5xl font-black tracking-tight text-white sm:text-7xl">
           {text.titleStart} <span className="text-[#a855f7] drop-shadow-[0_0_25px_rgba(168,85,247,0.5)]">{text.titleEnd}</span>
         </h1>
@@ -152,7 +155,7 @@ export default function Contact() {
       </header>
 
       <section className="my-10 grid grid-cols-1 gap-6 md:grid-cols-3">
-        <article className="overflow-hidden rounded-2xl border border-white/10 bg-[#0d0d14]/90 shadow-xl transition hover:-translate-y-1 hover:border-[#5865F2]/60">
+        <article className="overflow-hidden rounded-2xl border border-white/10 bg-[#0d0d14]/90 shadow-xl transition-all duration-150 hover:-translate-y-1 hover:border-[#5865F2]/60">
           <div className="flex h-28 items-end justify-between bg-gradient-to-r from-[#5865F2]/40 to-[#4752C4]/20 p-4 text-[#c7cbff]">
             <DiscordIcon />
             <span className="rounded-full border border-[#86efac]/30 bg-black/20 px-2 py-1 text-[10px] text-emerald-300">● ONLINE</span>
@@ -160,13 +163,13 @@ export default function Contact() {
           <div className="p-6">
             <h2 className="text-xl font-bold text-white">{text.discordTitle}</h2>
             <p className="mt-3 min-h-[48px] text-sm leading-relaxed text-neutral-400">{text.discordText}</p>
-            <a className="mt-6 flex items-center justify-center gap-2 rounded-xl bg-[#5865F2] px-4 py-2.5 font-semibold text-white transition hover:-translate-y-0.5 hover:bg-[#4752C4]" href={discordServerUrl} target="_blank" rel="noreferrer">
+            <a className="mt-6 flex items-center justify-center gap-2 rounded-xl bg-[#5865F2] px-4 py-2.5 font-semibold text-white transition-all duration-150 hover:-translate-y-0.5 hover:bg-[#4752C4] active:scale-95" href="https://discord.com" target="_blank" rel="noreferrer">
               <DiscordIcon />{text.discordButton}<ArrowUpRight size={16} />
             </a>
           </div>
         </article>
 
-        <article className="overflow-hidden rounded-2xl border border-white/10 bg-[#0d0d14]/90 shadow-xl transition hover:-translate-y-1 hover:border-white/30">
+        <article className="overflow-hidden rounded-2xl border border-white/10 bg-[#0d0d14]/90 shadow-xl transition-all duration-150 hover:-translate-y-1 hover:border-white/30">
           <div className="relative flex h-28 items-end bg-[#111118] p-4 text-white">
             <GithubIcon />
             <img className="absolute bottom-[-24px] right-5 h-12 w-12 rounded-full border-2 border-white/20" src="https://github.com/DereckVC.png?size=96" alt="DereckVC" />
@@ -174,13 +177,13 @@ export default function Contact() {
           <div className="p-6">
             <h2 className="text-xl font-bold text-white">{text.githubTitle}</h2>
             <p className="mt-3 min-h-[48px] text-sm leading-relaxed text-neutral-400">{text.githubText}</p>
-            <a className="mt-6 flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 font-semibold text-white transition hover:-translate-y-0.5 hover:bg-white/20" href={githubProfileUrl} target="_blank" rel="noreferrer">
+            <a className="mt-6 flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 font-semibold text-white transition-all duration-150 hover:-translate-y-0.5 hover:bg-white/20 active:scale-95" href="https://github.com/DereckVC" target="_blank" rel="noreferrer">
               <GithubIcon />{text.githubButton}<ArrowUpRight size={16} />
             </a>
           </div>
         </article>
 
-        <article className="overflow-hidden rounded-2xl border border-white/10 bg-[#0d0d14]/90 shadow-xl transition hover:-translate-y-1 hover:border-[#a855f7]/60">
+        <article className="overflow-hidden rounded-2xl border border-white/10 bg-[#0d0d14]/90 shadow-xl transition-all duration-150 hover:-translate-y-1 hover:border-[#a855f7]/60">
           <div className="flex h-28 items-end justify-between bg-gradient-to-r from-[#8b5cf6]/30 to-[#a855f7]/10 p-4 text-[#d8b4fe]">
             <Mail size={26} />
             <span className="rounded-full border border-[#a855f7]/40 bg-black/20 px-2 py-1 text-[10px] text-[#d8b4fe]">{text.mailStatus}</span>
@@ -190,10 +193,10 @@ export default function Contact() {
             <p className="mt-3 text-sm leading-relaxed text-neutral-400">{text.mailText}</p>
             <strong className="mt-4 block truncate text-sm text-neutral-200">{supportEmail}</strong>
             <div className="mt-5 flex gap-2">
-              <a className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#8b5cf6] px-3 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-[#7c3aed]" href={`mailto:${supportEmail}`}>
+              <a className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#8b5cf6] px-3 py-2.5 text-sm font-semibold text-white transition-all duration-150 hover:-translate-y-0.5 hover:bg-[#7c3aed] active:scale-95" href={`mailto:${supportEmail}`}>
                 <Send size={16} />{text.sendMail}
               </a>
-              <button className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-neutral-300 transition hover:border-[#8b5cf6] hover:text-white" type="button" onClick={copyEmail}>
+              <button className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-neutral-300 transition-all duration-150 hover:border-[#8b5cf6] hover:text-white active:scale-95" type="button" onClick={copyEmail}>
                 {copied ? <Check className="text-emerald-400" size={16} /> : <Copy size={16} />}{copied ? text.copied : text.copy}
               </button>
             </div>
@@ -201,40 +204,89 @@ export default function Contact() {
         </article>
       </section>
 
-      <form className="mx-auto max-w-3xl rounded-3xl border border-white/10 bg-[#0d0d14]/90 p-8 shadow-2xl" onSubmit={submit}>
+      <form className="mx-auto max-w-3xl rounded-3xl border border-white/10 bg-[#0d0d14]/90 p-8 shadow-2xl space-y-5" onSubmit={submit}>
         <h2 className="text-2xl font-bold text-white sm:text-3xl">{text.formTitle}</h2>
-        <p className="mt-2 text-sm text-neutral-400">{text.formSubtitle}</p>
+        <p className="text-sm text-neutral-400">{text.formSubtitle}</p>
 
-        <div className="mt-8 grid gap-5 sm:grid-cols-2">
-          <label className="grid gap-2 text-sm text-neutral-300">
+        <div className="grid gap-5 sm:grid-cols-2 pt-2">
+          <label htmlFor="contact-name" className="grid gap-2 text-sm text-neutral-300 font-medium">
             {text.name}
-            <input className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-neutral-600 focus:border-[#8b5cf6] focus:ring-2 focus:ring-[#8b5cf6]" name="name" value={form.name} onChange={updateForm} placeholder={text.namePlaceholder} required />
+            <input
+              id="contact-name"
+              className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-neutral-600 focus:border-[#8b5cf6] focus:ring-2 focus:ring-[#8b5cf6]"
+              name="name"
+              autoComplete="name"
+              value={form.name}
+              onChange={updateForm}
+              placeholder={text.namePlaceholder}
+              required
+            />
           </label>
-          <label className="grid gap-2 text-sm text-neutral-300">
+          <label htmlFor="contact-email" className="grid gap-2 text-sm text-neutral-300 font-medium">
             {text.email}
-            <input className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-neutral-600 focus:border-[#8b5cf6] focus:ring-2 focus:ring-[#8b5cf6]" name="email" value={form.email} onChange={updateForm} placeholder={text.emailPlaceholder} type="email" required />
+            <input
+              id="contact-email"
+              className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-neutral-600 focus:border-[#8b5cf6] focus:ring-2 focus:ring-[#8b5cf6]"
+              name="email"
+              autoComplete="email"
+              value={form.email}
+              onChange={updateForm}
+              placeholder={text.emailPlaceholder}
+              type="email"
+              required
+            />
           </label>
         </div>
 
-        <label className="mt-5 grid gap-2 text-sm text-neutral-300">
+        <label htmlFor="contact-category" className="grid gap-2 text-sm text-neutral-300 font-medium">
           {text.category}
-          <select className="rounded-xl border border-white/10 bg-[#111118] px-4 py-3 text-white outline-none focus:border-[#8b5cf6] focus:ring-2 focus:ring-[#8b5cf6]" name="category" value={form.category} onChange={updateForm}>
-            {text.categories.map((category) => <option key={category}>{category}</option>)}
+          <select
+            id="contact-category"
+            className="rounded-xl border border-white/10 bg-[#111118] px-4 py-3 text-white outline-none focus:border-[#8b5cf6] focus:ring-2 focus:ring-[#8b5cf6]"
+            name="category"
+            value={form.category}
+            onChange={updateForm}
+          >
+            {text.categories.map((category) => (
+              <option key={category} value={category}>{category}</option>
+            ))}
           </select>
         </label>
 
-        <label className="mt-5 grid gap-2 text-sm text-neutral-300">
+        <label htmlFor="contact-message" className="grid gap-2 text-sm text-neutral-300 font-medium">
           {text.message}
-          <textarea className="min-h-36 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-neutral-600 focus:border-[#8b5cf6] focus:ring-2 focus:ring-[#8b5cf6]" name="message" value={form.message} onChange={updateForm} placeholder={text.messagePlaceholder} rows="5" required minLength="10" />
+          <textarea
+            id="contact-message"
+            className="min-h-36 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-neutral-600 focus:border-[#8b5cf6] focus:ring-2 focus:ring-[#8b5cf6] resize-none"
+            name="message"
+            value={form.message}
+            onChange={updateForm}
+            placeholder={text.messagePlaceholder}
+            rows="5"
+            required
+            minLength="10"
+          />
         </label>
 
-        <button className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[#8b5cf6] px-5 py-3 font-bold text-white shadow-[0_0_24px_rgba(139,92,246,0.3)] transition hover:-translate-y-0.5 hover:bg-[#7c3aed] disabled:cursor-wait disabled:opacity-70" type="submit" disabled={sending}>
-          {sending ? text.sending : text.submit}
-          <Send size={17} />
+        <button
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#8b5cf6] px-5 py-3.5 font-bold text-white shadow-[0_0_24px_rgba(139,92,246,0.3)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-[#7c3aed] active:scale-[0.99] disabled:cursor-wait disabled:opacity-70"
+          type="submit"
+          disabled={sending}
+        >
+          {sending ? (
+            <span className="flex items-center gap-2">
+              <span className="h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              {text.sending}
+            </span>
+          ) : (
+            <span className="flex items-center gap-2">
+              {text.submit} <Send size={16} />
+            </span>
+          )}
         </button>
 
         {status.message && (
-          <p className={`mt-5 rounded-xl border px-4 py-3 text-sm ${status.type === 'success' ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300' : 'border-red-400/30 bg-red-400/10 text-red-300'}`}>
+          <p className={`rounded-xl border px-4 py-3 text-sm animate-in fade-in duration-200 ${status.type === 'success' ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300' : 'border-red-400/30 bg-red-400/10 text-red-300'}`}>
             {status.message}
           </p>
         )}

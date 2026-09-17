@@ -8,7 +8,7 @@ const resendApiKey = (process.env.RESEND_API_KEY || '').trim();
 const frontendUrl = (process.env.FRONTEND_URL || 'https://www.pandadev.me').replace(/\/+$/, '');
 const sender = 'PandaDev Security <support@pandadev.me>';
 
-const emailLayout = ({ title, intro, actionLabel, link, expiry }) => `
+const emailLayout = ({ title, intro, actionLabel, link, expiry, extraHtml = '' }) => `
   <div style="margin:0;padding:32px 16px;background:#09090b;color:#f5f5f5;font-family:Arial,Helvetica,sans-serif;">
     <div style="max-width:560px;margin:0 auto;padding:32px;background:#0d0d14;border:1px solid #8b5cf6;border-radius:16px;">
       <div style="margin-bottom:28px;font-size:28px;font-weight:800;letter-spacing:-1px;">
@@ -16,11 +16,12 @@ const emailLayout = ({ title, intro, actionLabel, link, expiry }) => `
       </div>
       <h1 style="margin:0 0 16px;color:#ffffff;font-size:24px;">${title}</h1>
       <p style="margin:0 0 24px;color:#c4c4cc;font-size:15px;line-height:1.7;">${intro}</p>
+      ${extraHtml}
       ${actionLabel && link ? `
       <div style="text-align:center;margin:32px 0;">
         <a href="${link}" style="display:inline-block;padding:14px 24px;border-radius:10px;background:#8b5cf6;color:#ffffff;font-weight:700;text-decoration:none;">${actionLabel}</a>
       </div>` : ''}
-      <p style="margin:0 0 12px;color:#8f8f9d;font-size:13px;">${expiry}</p>
+      ${expiry ? `<p style="margin:0 0 12px;color:#8f8f9d;font-size:13px;">${expiry}</p>` : ''}
       ${link ? `<p style="margin:0;color:#8f8f9d;font-size:12px;line-height:1.6;word-break:break-all;">Si el botón no funciona, copia este enlace:<br>${link}</p>` : ''}
     </div>
   </div>
@@ -36,7 +37,7 @@ const sendMail = async ({ to, subject, text, html }) => {
       },
       body: JSON.stringify({
         from: sender,
-        to: [to],
+        to: Array.isArray(to) ? to : [to],
         subject,
         text,
         html,
@@ -89,6 +90,40 @@ async function sendPasswordChangedEmail(toEmail) {
   });
 }
 
+async function sendContactAckEmail(name, toEmail, category) {
+  return sendMail({
+    to: toEmail,
+    subject: 'Hemos recibido tu mensaje — PandaDev',
+    text: `Hola ${name}, confirmamos la recepción de tu consulta sobre ${category}. Te responderemos a la brevedad.`,
+    html: emailLayout({
+      title: '¡Hemos recibido tu mensaje!',
+      intro: `Hola <strong>${name}</strong>, gracias por contactarnos. Tu consulta sobre <strong>${category}</strong> ha sido recibida y está en proceso de revisión por nuestro equipo técnico.`,
+      actionLabel: 'Visitar PandaDev',
+      link: frontendUrl,
+      expiry: 'Recibirás una respuesta personalizada en este correo electrónico.',
+    }),
+  });
+}
+
+async function sendAdminReplyEmail(toEmail, subject, messageContent) {
+  const formattedBox = `
+    <div style="background:#13131f;border:1px solid rgba(139,92,246,0.25);border-radius:12px;padding:20px;margin:24px 0;color:#e4e4e7;font-size:14px;line-height:1.8;white-space:pre-line;">
+      ${messageContent}
+    </div>
+  `;
+  return sendMail({
+    to: toEmail,
+    subject,
+    text: messageContent,
+    html: emailLayout({
+      title: 'Respuesta a tu consulta',
+      intro: 'Dereck de PandaDev ha respondido a tu mensaje:',
+      extraHtml: formattedBox,
+      expiry: 'Puedes responder directamente a este correo para coordinar los detalles.',
+    }),
+  });
+}
+
 async function sendVerificationEmail(toEmail, verifyToken) {
   const link = `${frontendUrl}/login?verify=${verifyToken}`;
   return sendMail({
@@ -129,8 +164,11 @@ async function sendOTPEmail(toEmail, otp, purpose = 'verificación de correo') {
 }
 
 module.exports = {
+  sendMail,
   sendPasswordResetEmail,
   sendPasswordChangedEmail,
+  sendContactAckEmail,
+  sendAdminReplyEmail,
   sendVerificationEmail,
   sendOTPEmail
 };

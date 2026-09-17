@@ -2,9 +2,23 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { 
   Activity, ArrowLeft, Bell, Check, Key, Lock, LogOut, 
-  Menu, Save, Shield, User, X, Gamepad2
+  Menu, QrCode, Save, Shield, ShieldCheck, User, X, Gamepad2, ExternalLink
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+
+// Resuelve dinámicamente la URL del API para evitar fallos hacia localhost en producción
+const getApiUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL
+  if (envUrl) {
+    return envUrl.endsWith('/api') ? envUrl : `${envUrl.replace(/\/+$/, '')}/api`
+  }
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+    return 'https://pandadev-api.onrender.com/api'
+  }
+  return 'http://localhost:5000/api'
+}
+
+const API = getApiUrl()
 
 // Componente Switch Toggle interactivo estilo Quantum
 function ToggleSwitch({ checked, onChange, disabled = false }) {
@@ -42,19 +56,26 @@ export default function Profile() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
 
+  // Estado 2FA y Modales
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false)
+  const [show2FAModal, setShow2FAModal] = useState(false)
+  const [showDisable2FAModal, setShowDisable2FAModal] = useState(false)
+  const [qrCodeData, setQrCodeData] = useState({ qrCodeUrl: '', base32: '' })
+  const [verify2FAToken, setVerify2FAToken] = useState('')
+  const [loading2FA, setLoading2FA] = useState(false)
+
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  // Redirección segura dentro de useEffect
+  // Redirección segura dentro de useEffect para evitar warnings de React
   useEffect(() => {
     if (!loading && !user) {
       navigate('/login', { replace: true })
     }
   }, [user, loading, navigate])
 
-  // Carga inicial de datos de usuario en los formularios
+  // Carga inicial de datos del usuario
   useEffect(() => {
     if (user) {
       setUsername(user.name || '')
@@ -63,7 +84,102 @@ export default function Profile() {
     }
   }, [user])
 
-  // Pantalla de espera Quantum mientras verifica sesión
+  // Helper para headers autenticados
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('token')
+    return {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    }
+  }
+
+  // 1. Abrir modal y generar secreto 2FA
+  const handleToggle2FA = async (nextState) => {
+    setError('')
+    setNotice('')
+
+    if (nextState) {
+      // Solicitar activación de 2FA
+      setLoading2FA(true)
+      try {
+        const res = await fetch(`${API}/auth/2fa/generate`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          credentials: 'include',
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.message || 'Error al generar código 2FA.')
+        setQrCodeData({ qrCodeUrl: data.qrCodeUrl, base32: data.base32 })
+        setShow2FAModal(true)
+      } catch (err) {
+        setError(err.message)
+      } finally {
+        setLoading2FA(false)
+      }
+    } else {
+      // Solicitar desactivación de 2FA
+      setVerify2FAToken('')
+      setShowDisable2FAModal(true)
+    }
+  }
+
+  // 2. Confirmar activación de 2FA con el código de 6 dígitos
+  const handleEnable2FA = async (e) => {
+    e.preventDefault()
+    setError('')
+    setLoading2FA(true)
+
+    try {
+      const res = await fetch(`${API}/auth/2fa/enable`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({
+          token: verify2FAToken.trim(),
+          base32: qrCodeData.base32
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.message || 'Código de verificación incorrecto.')
+
+      setTwoFactorEnabled(true)
+      setShow2FAModal(false)
+      setVerify2FAToken('')
+      setNotice('Autenticación 2FA activada con éxito. Tu cuenta ahora está protegida.')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading2FA(false)
+    }
+  }
+
+  // 3. Desactivar 2FA
+  const handleDisable2FA = async (e) => {
+    e.preventDefault()
+    setError('')
+    setLoading2FA(true)
+
+    try {
+      const res = await fetch(`${API}/auth/2fa/disable`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ token: verify2FAToken.trim() })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.message || 'Código de seguridad inválido.')
+
+      setTwoFactorEnabled(false)
+      setShowDisable2FAModal(false)
+      setVerify2FAToken('')
+      setNotice('Autenticación 2FA desactivada correctamente.')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading2FA(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#07070a] flex items-center justify-center">
@@ -74,9 +190,7 @@ export default function Profile() {
     )
   }
 
-  if (!user) {
-    return null
-  }
+  if (!user) return null
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault()
@@ -290,11 +404,13 @@ export default function Profile() {
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-5">
-                <span className="text-[11px] font-mono text-neutral-400 uppercase">Membresía</span>
+                <span className="text-[11px] font-mono text-neutral-400 uppercase">Seguridad 2FA</span>
                 <strong className="block text-xl font-bold text-white mt-1">
-                  {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Septiembre 2026'}
+                  {twoFactorEnabled ? 'Activado' : 'Desactivado'}
                 </strong>
-                <span className="text-[10px] text-neutral-400 mt-2 block font-mono">VERIFICADO</span>
+                <span className={`text-[10px] mt-2 block font-mono ${twoFactorEnabled ? 'text-emerald-400' : 'text-neutral-500'}`}>
+                  {twoFactorEnabled ? '● GOOGLE AUTHENTICATOR' : '○ NO CONFIGURADO'}
+                </span>
               </div>
             </div>
 
@@ -398,7 +514,7 @@ export default function Profile() {
                     value={discordTag}
                     onChange={(e) => setDiscordTag(e.target.value)}
                   />
-                  <span className="text-[10px] text-neutral-500 mt-1 block">Para recibir asistencia y notificaciones técnicas.</span>
+                  <span className="text-[10px] text-neutral-500 mt-1 block">Para recibir asistencia y soporte técnico directo.</span>
                 </div>
 
                 <button
@@ -473,26 +589,31 @@ export default function Profile() {
               </form>
             </div>
 
+            {/* SECCIÓN 2FA ACTIVA E INTERACTIVA */}
             <div className="flex items-center justify-between p-5 rounded-2xl border border-white/10 bg-[#0d0d14]/90">
               <div className="flex items-center gap-3.5">
-                <div className="grid h-10 w-10 place-items-center rounded-xl bg-white/5 text-[#a855f7]">
-                  <Shield size={20} />
+                <div className="grid h-10 w-10 place-items-center rounded-xl bg-[#8b5cf6]/10 text-[#a855f7] border border-[#8b5cf6]/20">
+                  <ShieldCheck size={20} />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-white">Autenticación 2FA</h3>
-                    <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                      Próximamente
+                    <h3 className="text-sm font-bold text-white">Autenticación en Dos Pasos (2FA)</h3>
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase ${
+                      twoFactorEnabled ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-neutral-800 text-neutral-400'
+                    }`}>
+                      {twoFactorEnabled ? 'PROTEGIDO' : 'INACTIVO'}
                     </span>
                   </div>
-                  <p className="text-xs text-neutral-400 mt-0.5">Protege tu acceso solicitando código temporal de Google Authenticator.</p>
+                  <p className="text-xs text-neutral-400 mt-0.5">
+                    Solicita un código de 6 dígitos de Google Authenticator al iniciar sesión.
+                  </p>
                 </div>
               </div>
 
               <ToggleSwitch
                 checked={twoFactorEnabled}
-                onChange={setTwoFactorEnabled}
-                disabled={true}
+                onChange={handleToggle2FA}
+                disabled={loading2FA}
               />
             </div>
 
@@ -517,12 +638,12 @@ export default function Profile() {
         {activeTab === 'notifications' && (
           <section className="rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-6">
             <h2 className="text-base font-bold text-white mb-1">Preferencias de Notificación</h2>
-            <p className="text-xs text-neutral-400 mb-6">Gestiona la recepción de avisos y respuestas a tu correo.</p>
+            <p className="text-xs text-neutral-400 mb-6">Gestiona la recepción de avisos y confirmaciones de seguridad.</p>
             <div className="space-y-4 max-w-lg">
               <div className="flex items-center justify-between p-3.5 rounded-xl bg-white/[0.02] border border-white/5">
                 <div>
                   <p className="text-xs font-semibold text-white">Notificaciones por Correo</p>
-                  <p className="text-[11px] text-neutral-400">Recibe confirmaciones de seguridad y mensajes.</p>
+                  <p className="text-[11px] text-neutral-400">Recibe confirmaciones de cambios de clave y soporte.</p>
                 </div>
                 <ToggleSwitch checked={true} onChange={() => {}} />
               </div>
@@ -530,34 +651,178 @@ export default function Profile() {
           </section>
         )}
 
-        {/* 5. TAB: VINCULACIONES */}
+        {/* 5. TAB: VINCULACIONES (BOTONES REALES OAUTH) */}
         {activeTab === 'connections' && (
           <section className="rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-6">
             <h2 className="text-base font-bold text-white mb-1">Cuentas Conectadas</h2>
-            <p className="text-xs text-neutral-400 mb-6">Tus servicios externos vinculados para inicio de sesión rápido.</p>
-            <div className="space-y-3 max-w-lg">
+            <p className="text-xs text-neutral-400 mb-6">Vincula tus proveedores externos para acceder con un solo clic.</p>
+            
+            <div className="space-y-3.5 max-w-lg">
+              {/* DISCORD */}
               <div className="flex items-center justify-between p-4 rounded-xl border border-white/10 bg-white/[0.02]">
-                <div>
-                  <p className="text-xs font-bold text-white">Discord</p>
-                  <p className="text-[11px] text-neutral-400">{user.discordTag ? 'Conectado' : 'No conectado'}</p>
+                <div className="flex items-center gap-3">
+                  <div className="grid h-10 w-10 place-items-center rounded-xl bg-[#5865F2]/10 text-[#5865F2]">
+                    <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                      <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.893.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-white">Discord</p>
+                    <p className="text-[11px] text-neutral-400">{user.discordTag ? user.discordTag : 'No vinculado'}</p>
+                  </div>
                 </div>
-                <span className={`text-[10px] font-mono px-2.5 py-1 rounded-full ${user.discordTag ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/5 text-neutral-400'}`}>
-                  {user.discordTag ? 'CONECTADO' : 'DESCONECTADO'}
-                </span>
+
+                {user.discordTag ? (
+                  <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    ● CONECTADO
+                  </span>
+                ) : (
+                  <a
+                    href={`${API}/auth/discord`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#5865F2]/40 bg-[#5865F2]/10 hover:bg-[#5865F2]/20 text-[#8ea1e1] text-xs font-semibold transition"
+                  >
+                    Vincular <ExternalLink size={12} />
+                  </a>
+                )}
               </div>
+
+              {/* GITHUB */}
               <div className="flex items-center justify-between p-4 rounded-xl border border-white/10 bg-white/[0.02]">
-                <div>
-                  <p className="text-xs font-bold text-white">GitHub</p>
-                  <p className="text-[11px] text-neutral-400">{user.githubUsername ? 'Conectado' : 'No conectado'}</p>
+                <div className="flex items-center gap-3">
+                  <div className="grid h-10 w-10 place-items-center rounded-xl bg-white/10 text-white">
+                    <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                      <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-white">GitHub</p>
+                    <p className="text-[11px] text-neutral-400">{user.githubUsername ? `@${user.githubUsername}` : 'No vinculado'}</p>
+                  </div>
                 </div>
-                <span className={`text-[10px] font-mono px-2.5 py-1 rounded-full ${user.githubUsername ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/5 text-neutral-400'}`}>
-                  {user.githubUsername ? 'CONECTADO' : 'DESCONECTADO'}
-                </span>
+
+                {user.githubUsername ? (
+                  <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    ● CONECTADO
+                  </span>
+                ) : (
+                  <a
+                    href={`${API}/auth/github`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/20 bg-white/5 hover:bg-white/10 text-white text-xs font-semibold transition"
+                  >
+                    Vincular <ExternalLink size={12} />
+                  </a>
+                )}
               </div>
             </div>
           </section>
         )}
       </main>
+
+      {/* MODAL ACTIVAR 2FA */}
+      {show2FAModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-sm rounded-3xl border border-[#8b5cf6]/40 bg-[#0d0d14] p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <QrCode size={18} className="text-[#a855f7]" />
+                <h3 className="text-sm font-bold text-white">Vincular Authenticator</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShow2FAModal(false)}
+                className="text-neutral-400 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <p className="text-xs text-neutral-300 leading-relaxed">
+              Escanea este código con <strong>Google Authenticator</strong> o ingresa la clave manualmente:
+            </p>
+
+            {qrCodeData.qrCodeUrl && (
+              <div className="flex flex-col items-center justify-center p-3 bg-white rounded-2xl">
+                <img src={qrCodeData.qrCodeUrl} alt="2FA QR Code" className="w-44 h-44" />
+              </div>
+            )}
+
+            <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-center">
+              <span className="text-[10px] font-mono text-neutral-400 block mb-1">CLAVE SECRETA:</span>
+              <code className="text-xs font-mono font-bold text-[#c4b5fd] select-all">
+                {qrCodeData.base32}
+              </code>
+            </div>
+
+            <form onSubmit={handleEnable2FA} className="space-y-3">
+              <div className="block text-xs text-neutral-300">
+                <label htmlFor="modal-2fa-token" className="block mb-1">Código de 6 Dígitos:</label>
+                <input
+                  id="modal-2fa-token"
+                  type="text"
+                  maxLength={6}
+                  inputMode="numeric"
+                  placeholder="000000"
+                  required
+                  className="w-full text-center tracking-[0.3em] font-mono text-base rounded-xl border border-white/10 bg-white/5 py-2 text-white outline-none focus:border-[#8b5cf6]"
+                  value={verify2FAToken}
+                  onChange={(e) => setVerify2FAToken(e.target.value.replace(/\D/g, ''))}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading2FA || verify2FAToken.length < 6}
+                className="w-full button button-primary py-2.5 text-xs font-semibold justify-center"
+              >
+                {loading2FA ? 'Verificando...' : 'Confirmar y Activar 2FA'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DESACTIVAR 2FA */}
+      {showDisable2FAModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-sm rounded-3xl border border-red-500/40 bg-[#0d0d14] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-red-400">Desactivar Autenticación 2FA</h3>
+              <button
+                type="button"
+                onClick={() => setShowDisable2FAModal(false)}
+                className="text-neutral-400 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <p className="text-xs text-neutral-300 leading-relaxed">
+              Por seguridad, ingresa el código actual de tu aplicación autenticadora para confirmar la desactivación:
+            </p>
+
+            <form onSubmit={handleDisable2FA} className="space-y-3">
+              <input
+                type="text"
+                maxLength={6}
+                inputMode="numeric"
+                placeholder="000000"
+                required
+                className="w-full text-center tracking-[0.3em] font-mono text-base rounded-xl border border-white/10 bg-white/5 py-2 text-white outline-none focus:border-red-500"
+                value={verify2FAToken}
+                onChange={(e) => setVerify2FAToken(e.target.value.replace(/\D/g, ''))}
+              />
+
+              <button
+                type="submit"
+                disabled={loading2FA || verify2FAToken.length < 6}
+                className="w-full py-2.5 rounded-xl border border-red-500/30 bg-red-500/20 hover:bg-red-500/30 text-red-200 text-xs font-semibold transition"
+              >
+                {loading2FA ? 'Confirmando...' : 'Confirmar y Desactivar'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

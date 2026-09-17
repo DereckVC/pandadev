@@ -1,138 +1,163 @@
 const express = require('express');
-const nodemailer = require('nodemailer');
-const Message = require('../models/Message');
-const { requireAuth } = require('../middleware/auth');
-
 const router = express.Router();
+const Message = require('../models/Message');
 
-const requireAdminRole = [requireAuth, (req, res, next) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin role required' });
-  return next();
-}];
+const resendApiKey = (process.env.RESEND_API_KEY || '').trim();
+const sender = 'PandaDev Security <support@pandadev.me>';
+const adminEmail = process.env.ADMIN_EMAIL || 'minombrexd158@gmail.com';
 
-// Helper que soporta tanto EMAIL_USER/EMAIL_PASS como SMTP_USER/SMTP_PASS
-const sendSupportEmail = async (to, subject, text) => {
-  const user = process.env.EMAIL_USER || process.env.SMTP_USER;
-  const pass = process.env.EMAIL_PASS || process.env.SMTP_PASS;
-
-  if (!user || !pass) {
-    console.error('⚠️ [EMAIL ERROR]: Credenciales de correo no encontradas en process.env.');
-    throw new Error('Credenciales de correo no configuradas en el servidor Render.');
+// Envío seguro mediante HTTPS para evitar el bloqueo de puertos SMTP en Render
+const sendMail = async ({ to, subject, html, text }) => {
+  if (!resendApiKey) {
+    console.warn('⚠️ [CONTACT]: RESEND_API_KEY no configurada en las variables de entorno.');
+    return false;
   }
-
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user, pass },
-  });
-
-  const info = await transporter.sendMail({
-    from: `"PandaDev Support" <${user}>`,
-    replyTo: 'support@pandadev.me',
-    to,
-    subject,
-    text,
-  });
-
-  console.log('✅ [EMAIL ENVIADO]: ID', info.messageId, 'destinatario:', to);
-  return info;
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${resendApiKey}`
+      },
+      body: JSON.stringify({
+        from: sender,
+        to: Array.isArray(to) ? to : [to],
+        subject,
+        html,
+        text
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      console.error('Error de Resend en contacto:', data);
+    }
+    return res.ok;
+  } catch (err) {
+    console.error('Error despachando correo con Resend:', err.message);
+    return false;
+  }
 };
 
-// Formulario de contacto público
+// Plantilla visual HTML para el acuse automático al remitente
+const createAckHtml = (name, category, message) => `
+  <div style="margin:0;padding:32px 16px;background:#09090b;color:#f5f5f5;font-family:Arial,Helvetica,sans-serif;">
+    <div style="max-width:560px;margin:0 auto;padding:32px;background:#0d0d14;border:1px solid #8b5cf6;border-radius:16px;">
+      <div style="margin-bottom:28px;font-size:28px;font-weight:800;letter-spacing:-1px;">
+        <span style="color:#ffffff;">Panda</span><span style="color:#a855f7;">Dev</span>
+      </div>
+      <h1 style="margin:0 0 16px;color:#ffffff;font-size:24px;">¡Hemos recibido tu mensaje!</h1>
+      <p style="margin:0 0 20px;color:#c4c4cc;font-size:15px;line-height:1.7;">
+        Hola <strong style="color:#ffffff;">${name}</strong>, gracias por comunicarte con nosotros. Tu propuesta ha sido registrada en nuestro sistema y está siendo revisada por nuestro equipo técnico.
+      </p>
+      <div style="background:#141420;border:1px solid rgba(139,92,246,0.25);border-radius:12px;padding:20px;margin:24px 0;">
+        <p style="margin:0 0 8px;font-size:12px;font-family:monospace;color:#a855f7;text-transform:uppercase;letter-spacing:1px;">
+          Categoría: ${category}
+        </p>
+        <p style="margin:0;font-size:14px;color:#e4e4e7;line-height:1.6;font-style:italic;">
+          "${message}"
+        </p>
+      </div>
+      <p style="margin:0 0 12px;color:#8f8f9d;font-size:13px;line-height:1.6;">
+        Recibirás una respuesta personalizada directamente en esta dirección de correo en breve.
+      </p>
+      <div style="margin-top:28px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.1);text-align:center;">
+        <a href="https://www.pandadev.me" style="display:inline-block;padding:12px 24px;border-radius:10px;background:#8b5cf6;color:#ffffff;font-weight:700;text-decoration:none;font-size:13px;">
+          Visitar PandaDev
+        </a>
+      </div>
+      <p style="margin:20px 0 0;color:#52525b;font-size:11px;text-align:center;">
+        © 2026 PandaDev Studio. Todos los derechos reservados.
+      </p>
+    </div>
+  </div>
+`;
+
+// Plantilla visual HTML para notificar al administrador
+const createAdminNotificationHtml = (name, email, category, message) => `
+  <div style="margin:0;padding:32px 16px;background:#09090b;color:#f5f5f5;font-family:Arial,Helvetica,sans-serif;">
+    <div style="max-width:560px;margin:0 auto;padding:32px;background:#0d0d14;border:1px solid #8b5cf6;border-radius:16px;">
+      <div style="margin-bottom:20px;font-size:24px;font-weight:800;">
+        <span style="color:#ffffff;">Panda</span><span style="color:#a855f7;">Dev</span>
+        <span style="font-size:12px;color:#a855f7;font-family:monospace;margin-left:8px;">[NUEVO MENSAJE]</span>
+      </div>
+      <h2 style="margin:0 0 16px;color:#ffffff;font-size:20px;">Nuevo contacto recibido</h2>
+      <ul style="margin:0 0 20px;padding:0 0 0 18px;color:#c4c4cc;font-size:14px;line-height:1.8;">
+        <li><strong>Nombre / Organización:</strong> ${name}</li>
+        <li><strong>Email:</strong> ${email}</li>
+        <li><strong>Categoría:</strong> ${category}</li>
+      </ul>
+      <div style="background:#141420;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:18px;margin-bottom:24px;color:#ffffff;font-size:14px;line-height:1.6;">
+        ${message}
+      </div>
+      <div style="text-align:center;">
+        <a href="https://www.pandadev.me/admin" style="display:inline-block;padding:12px 24px;border-radius:10px;background:#8b5cf6;color:#ffffff;font-weight:700;text-decoration:none;font-size:13px;">
+          Abrir Command Center
+        </a>
+      </div>
+    </div>
+  </div>
+`;
+
 router.post('/', async (req, res) => {
-  const { name, email, category, message } = req.body || {};
-  const normalizedEmail = typeof email === 'string' ? email.trim() : '';
-  const fields = [name, normalizedEmail, category, message];
-  const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
-
-  if (fields.some((field) => typeof field !== 'string' || !field.trim())) {
-    return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios' });
-  }
-  if (!validEmail) {
-    return res.status(400).json({ success: false, message: 'El correo electrónico no es válido' });
-  }
-
   try {
-    const saved = await Message.create({ 
-      name: name.trim(), 
-      email: normalizedEmail, 
-      category: category.trim(), 
-      message: message.trim() 
+    const { name, category, message } = req.body;
+    const rawEmail = req.body.email || req.body.mail;
+    const email = rawEmail ? String(rawEmail).trim().toLowerCase() : '';
+
+    if (!name || !email || !message) {
+      return res.status(400).json({ message: 'Todos los campos obligatorios deben ser completados.' });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ message: 'Por favor ingresa un correo electrónico válido.' });
+    }
+
+    // 1. Guardar mensaje en la base de datos
+    const savedMessage = await Message.create({
+      name: name.trim(),
+      email,
+      category: category || 'General',
+      message: message.trim(),
+      status: 'unread',
     });
 
+    // 2. Acuse automático al remitente mediante Resend
     try {
-      await sendSupportEmail(
-        normalizedEmail,
-        'PandaDev — Hemos recibido tu mensaje',
-        `Hola ${name.trim()},\n\nGracias por comunicarte con PandaDev. Hemos recibido tu mensaje referente a "${category.trim()}".\n\nRevisaré los detalles técnicos y me pondré en contacto contigo en un lapso de 24 a 48 horas.\n\nCopia de tu consulta:\n"${message.trim()}"\n\nAtentamente,\nDereckVC — PandaDev Systems\nsupport@pandadev.me`
-      );
-    } catch (mailErr) {
-      console.warn('No se pudo enviar el acuse automático al remitente:', mailErr.message);
+      await sendMail({
+        to: email,
+        subject: 'Hemos recibido tu mensaje — PandaDev',
+        html: createAckHtml(name, category || 'General', message),
+        text: `Hola ${name}, hemos recibido tu mensaje con categoría ${category || 'General'}. Te responderemos pronto.`
+      });
+      console.log('✓ Acuse automático enviado a:', email);
+    } catch (mailError) {
+      console.error('No se pudo enviar el acuse automático al remitente:', mailError.message);
     }
 
-    return res.status(201).json({ success: true, message: 'Mensaje recibido y guardado.', id: saved._id });
-  } catch (error) {
-    console.error('Error guardando mensaje:', error.message);
-    return res.status(500).json({ success: false, message: 'No se pudo guardar el mensaje' });
-  }
-});
-
-// Listar mensajes (Admin)
-router.get('/', ...requireAdminRole, async (req, res) => {
-  try {
-    return res.json(await Message.find().sort({ createdAt: -1 }));
-  } catch (error) {
-    return res.status(500).json({ success: false, message: 'No se pudieron cargar los mensajes' });
-  }
-});
-
-// Marcar como leído (Admin)
-router.put('/:id/read', ...requireAdminRole, async (req, res) => {
-  try {
-    const message = await Message.findByIdAndUpdate(
-      req.params.id, 
-      { read: true }, 
-      { returnDocument: 'after' }
-    );
-    return message ? res.json(message) : res.status(404).json({ message: 'Message not found' });
-  } catch (error) { 
-    return res.status(400).json({ message: 'Invalid message id' }); 
-  }
-});
-
-// Responder desde el panel con preset (Admin)
-router.post('/:id/reply', ...requireAdminRole, async (req, res) => {
-  try {
-    const { subject, replyText } = req.body || {};
-    if (!replyText || !replyText.trim()) {
-      return res.status(400).json({ message: 'El cuerpo de la respuesta es obligatorio.' });
+    // 3. Notificación al administrador
+    try {
+      if (adminEmail) {
+        await sendMail({
+          to: adminEmail,
+          subject: `Nuevo mensaje de contacto: ${name} (${category || 'General'})`,
+          html: createAdminNotificationHtml(name, email, category || 'General', message),
+          text: `Nuevo mensaje de ${name} (${email}): ${message}`
+        });
+        console.log('✓ Notificación de contacto enviada al administrador');
+      }
+    } catch (adminMailError) {
+      console.error('No se pudo notificar al administrador:', adminMailError.message);
     }
 
-    const message = await Message.findById(req.params.id);
-    if (!message) return res.status(404).json({ message: 'Mensaje no encontrado.' });
-
-    await sendSupportEmail(
-      message.email,
-      subject || `Re: Consulta sobre ${message.category} — PandaDev`,
-      `${replyText.trim()}\n\n---\nMensaje original enviado por ${message.name}:\n"${message.message}"\n\nPandaDev Support | support@pandadev.me`
-    );
-
-    message.read = true;
-    await message.save();
-
-    return res.json({ success: true, message: 'Respuesta despachada con éxito por correo.' });
+    return res.status(201).json({
+      success: true,
+      message: 'Mensaje enviado correctamente. Recibirás un acuse en tu correo.',
+      data: savedMessage,
+    });
   } catch (error) {
-    console.error('Error enviando correo de respuesta:', error.message);
-    return res.status(500).json({ message: `Fallo al enviar correo: ${error.message}` });
-  }
-});
-
-// Eliminar mensaje (Admin)
-router.delete('/:id', ...requireAdminRole, async (req, res) => {
-  try {
-    const message = await Message.findByIdAndDelete(req.params.id);
-    return message ? res.json({ message: 'Mensaje eliminado' }) : res.status(404).json({ message: 'Message not found' });
-  } catch (error) { 
-    return res.status(400).json({ message: 'Invalid message id' }); 
+    console.error('Error en ruta de contacto:', error.message);
+    return res.status(500).json({ message: 'Error interno al registrar tu mensaje.' });
   }
 });
 

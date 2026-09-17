@@ -28,16 +28,19 @@ const emptyProject = {
 
 const replyPresets = [
   {
+    id: 'ack',
     title: 'Acuse y en revisión',
     subject: 'Hemos recibido tu consulta — PandaDev',
     text: 'Hola,\n\nGracias por comunicarte con PandaDev. He recibido tu mensaje y revisaré los requerimientos técnicos con atención. Me pondré en contacto contigo a la brevedad para coordinar los siguientes pasos.\n\nSaludos cordiales,\nDereckVC — PandaDev Systems'
   },
   {
+    id: 'specs',
     title: 'Solicitud de especificaciones',
     subject: 'Detalles técnicos de tu proyecto — PandaDev',
     text: 'Hola,\n\nPara evaluar tu proyecto y preparar una propuesta precisa, ¿podrías detallarme el alcance, las funcionalidades deseadas y si requieres integración con algún servicio externo o base de datos específica?\n\nQuedo atento a tus comentarios.\nDereckVC — PandaDev Systems'
   },
   {
+    id: 'availability',
     title: 'Disponibilidad inmediata',
     subject: 'Propuesta de inicio de proyecto — PandaDev',
     text: 'Hola,\n\nActualmente cuento con disponibilidad para comenzar el desarrollo de tu propuesta de inmediato. Podemos agendar una conversación breve o coordinar especificaciones directamente para empezar con la arquitectura inicial.\n\nAtentamente,\nDereckVC — PandaDev Systems'
@@ -66,13 +69,30 @@ function ToggleSwitch({ checked, onChange, label, description, size = 'md' }) {
   )
 }
 
+// Resuelve dinámicamente la URL oficial evitando caídas a localhost
+const getApiUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL
+  if (envUrl) {
+    return envUrl.endsWith('/api') ? envUrl : `${envUrl.replace(/\/+$/, '')}/api`
+  }
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+    return 'https://pandadev-api.onrender.com/api'
+  }
+  return 'http://localhost:5000/api'
+}
+
 export default function Admin() {
-  const { user, api, logout } = useAuth()
-  const apiBase = api?.endsWith('/api') ? api : `${(api || '/api').replace(/\/+$/, '')}/api`
-  const authHeaders = () => ({
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${localStorage.getItem('panda_token') || ''}`,
-  })
+  const { user, logout } = useAuth()
+  const apiBase = getApiUrl()
+
+  const authHeaders = () => {
+    const token = localStorage.getItem('token') || localStorage.getItem('panda_token') || ''
+    return {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    }
+  }
+
   const navigate = useNavigate()
 
   const [activeTab, setActiveTab] = useState('overview')
@@ -91,6 +111,7 @@ export default function Admin() {
   const [syncingGithub, setSyncingGithub] = useState(false)
 
   const [replyingMessage, setReplyingMessage] = useState(null)
+  const [selectedPresetId, setSelectedPresetId] = useState('ack')
   const [replySubject, setReplySubject] = useState('')
   const [replyText, setReplyText] = useState('')
   const [sendingReply, setSendingReply] = useState(false)
@@ -107,13 +128,25 @@ export default function Admin() {
           fetch(`${apiBase}/admin/stats`, { credentials: 'include', headers: authHeaders() }),
           fetch(`${apiBase}/admin/users`, { credentials: 'include', headers: authHeaders() }),
           fetch(`${apiBase}/admin/projects`, { credentials: 'include', headers: authHeaders() }),
-          fetch(`${apiBase}/contact`, { credentials: 'include', headers: authHeaders() })
+          fetch(`${apiBase}/admin/messages`, { credentials: 'include', headers: authHeaders() })
         ])
 
-        if (statsRes.ok) setStats(await statsRes.json())
-        if (usersRes.ok) setUsers(await usersRes.json())
-        if (projectsRes.ok) setProjects(await projectsRes.json())
-        if (messagesRes.ok) setMessages(await messagesRes.json())
+        if (statsRes.ok) {
+          const s = await statsRes.json()
+          setStats(s.stats || s)
+        }
+        if (usersRes.ok) {
+          const u = await usersRes.json()
+          setUsers(u.users || u)
+        }
+        if (projectsRes.ok) {
+          const p = await projectsRes.json()
+          setProjects(p.projects || p)
+        }
+        if (messagesRes.ok) {
+          const m = await messagesRes.json()
+          setMessages(m.messages || m)
+        }
       } catch (err) {
         setError(err.message || 'Error al conectar con los servicios del panel')
       }
@@ -123,12 +156,18 @@ export default function Admin() {
 
   const loadProjects = async () => {
     const res = await fetch(`${apiBase}/admin/projects`, { credentials: 'include', headers: authHeaders() })
-    if (res.ok) setProjects(await res.json())
+    if (res.ok) {
+      const p = await res.json()
+      setProjects(p.projects || p)
+    }
   }
 
   const loadMessages = async () => {
-    const res = await fetch(`${apiBase}/contact`, { credentials: 'include', headers: authHeaders() })
-    if (res.ok) setMessages(await res.json())
+    const res = await fetch(`${apiBase}/admin/messages`, { credentials: 'include', headers: authHeaders() })
+    if (res.ok) {
+      const m = await res.json()
+      setMessages(m.messages || m)
+    }
   }
 
   const request = async (url, options = {}) => {
@@ -240,10 +279,11 @@ export default function Admin() {
   const toggleRole = async (account) => {
     try {
       await request(`/admin/users/${account._id}/role`, {
-        method: 'PUT',
+        method: 'PATCH',
         body: JSON.stringify({ role: account.role === 'admin' ? 'user' : 'admin' })
       })
-      setUsers(await request('/admin/users'))
+      const u = await request('/admin/users')
+      setUsers(u.users || u)
       setNotice(`Rol de ${account.email} actualizado.`)
     } catch (err) {
       setError(err.message)
@@ -296,18 +336,31 @@ export default function Admin() {
   }
 
   const openReplyModal = (msg) => {
-    setReplyingMessage(msg)
+    setSelectedMessage(msg)
+    setSelectedPresetId('ack')
+    const defaultPreset = replyPresets[0]
     setReplySubject(`Re: Consulta sobre ${msg.category} — PandaDev`)
-    setReplyText(replyPresets[0].text)
+    setReplyText(defaultPreset.text)
+    setReplyingMessage(msg)
+  }
+
+  const applyPreset = (preset) => {
+    setSelectedPresetId(preset.id)
+    setReplySubject(preset.subject)
+    setReplyText(preset.text)
   }
 
   const sendReply = async (e) => {
     e.preventDefault()
     setSendingReply(true)
     try {
-      await request(`/contact/${replyingMessage._id}/reply`, {
+      await request(`/admin/messages/${replyingMessage._id}/reply`, {
         method: 'POST',
-        body: JSON.stringify({ subject: replySubject, replyText })
+        body: JSON.stringify({
+          subject: replySubject,
+          message: replyText,
+          reply: replyText
+        })
       })
       setReplyingMessage(null)
       setNotice('Respuesta despachada con éxito por correo.')
@@ -332,7 +385,7 @@ export default function Admin() {
     {
       label: 'Comunicaciones',
       items: [
-        { id: 'messages', label: 'Mensajes Recibidos', icon: <Mail size={17} />, badge: messages.filter((m) => !m.read).length, badgeAlert: true },
+        { id: 'messages', label: 'Mensajes Recibidos', icon: <Mail size={17} />, badge: messages.filter((m) => m.status === 'unread' || !m.read).length, badgeAlert: true },
       ]
     },
     {
@@ -472,10 +525,10 @@ export default function Admin() {
               <StatCard icon={<Activity />} label="Visitas Totales" value={stats?.totalVisits ?? '—'} accent="violet" detail="TRÁFICO GLOBAL" />
               <StatCard icon={<Activity />} label="Visitantes Únicos Hoy" value={stats?.uniqueVisitsToday ?? '—'} accent="green" detail="ACTIVIDAD EN TIEMPO REAL" />
               <StatCard icon={<Users />} label="Usuarios Registrados" value={stats?.totalUsers ?? '—'} accent="cyan" detail="CUENTAS EN PLATAFORMA" />
-              <StatCard icon={<Shield />} label="Cuentas Verificadas" value={stats ? `${stats.verifiedUsers} (${stats.totalUsers ? Math.round((stats.verifiedUsers / stats.totalUsers) * 100) : 0}%)` : '—'} accent="violet" />
+              <StatCard icon={<Shield />} label="Cuentas Verificadas" value={stats ? `${stats.verifiedUsers ?? stats.totalUsers} (${stats.totalUsers ? Math.round(((stats.verifiedUsers ?? stats.totalUsers) / stats.totalUsers) * 100) : 100}%)` : '—'} accent="violet" />
               <StatCard icon={<Code2 />} label="Proyectos Publicados" value={stats?.totalProjects ?? projects.length} accent="violet" detail="CATÁLOGO ACTIVO" onClick={() => setActiveTab('projects')} />
               <StatCard icon={<Inbox />} label="Mensajes Totales" value={messages.length} accent="cyan" />
-              <StatCard icon={<Inbox />} label="Mensajes Pendientes" value={messages.filter((m) => !m.read).length} accent="red" detail="REQUIEREN ATENCIÓN" onClick={() => setActiveTab('messages')} />
+              <StatCard icon={<Inbox />} label="Mensajes Pendientes" value={messages.filter((m) => m.status === 'unread' || !m.read).length} accent="red" detail="REQUIEREN ATENCIÓN" onClick={() => setActiveTab('messages')} />
               <StatCard icon={<Activity />} label="Servidor & MongoDB" value="ONLINE" accent="green" detail="177MS ATLAS" />
             </div>
 
@@ -618,12 +671,12 @@ export default function Admin() {
               <EmptyState text="No hay mensajes de contacto pendientes." />
             ) : (
               messages.map((item) => (
-                <article key={item._id} className={`p-5 sm:p-6 rounded-2xl border bg-[#0d0d14]/90 ${item.read ? 'border-white/10' : 'border-[#8b5cf6]/50 shadow-[0_0_15px_rgba(139,92,246,0.15)]'}`}>
+                <article key={item._id} className={`p-5 sm:p-6 rounded-2xl border bg-[#0d0d14]/90 ${item.status === 'replied' ? 'border-white/10' : 'border-[#8b5cf6]/50 shadow-[0_0_15px_rgba(139,92,246,0.15)]'}`}>
                   <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
                     <div>
                       <div className="flex items-center gap-2">
                         <h2 className="font-bold text-base sm:text-lg text-white">{item.name}</h2>
-                        {!item.read && <span className="bg-[#8b5cf6] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">NUEVO</span>}
+                        {item.status !== 'replied' && !item.read && <span className="bg-[#8b5cf6] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">NUEVO</span>}
                       </div>
                       <a className="text-sm text-[#c4b5fd] hover:underline" href={`mailto:${item.email}`}>{item.email}</a>
                     </div>
@@ -633,11 +686,19 @@ export default function Admin() {
                     </div>
                   </div>
                   <p className="bg-black/40 p-4 rounded-xl text-sm leading-relaxed text-neutral-300 mb-4 whitespace-pre-wrap">{item.message}</p>
+                  
+                  {item.reply && (
+                    <div className="p-3.5 rounded-xl bg-purple-950/20 border border-purple-500/20 text-xs text-purple-200 mb-4">
+                      <span className="font-mono text-[10px] text-purple-400 uppercase block mb-1">Última respuesta enviada:</span>
+                      {item.reply}
+                    </div>
+                  )}
+
                   <div className="flex flex-wrap gap-2">
-                    <button onClick={() => openReplyModal(item)} className="button button-primary text-xs py-2">
+                    <button onClick={() => openReplyModal(item)} className="button button-primary text-xs py-2 transition-transform duration-150 active:scale-95">
                       <Send size={13} /> Responder con Preset
                     </button>
-                    <button onClick={() => request(`/contact/${item._id}`, { method: 'DELETE' }).then(loadMessages)} className="button border border-red-400/30 text-red-300 hover:bg-red-400/10 text-xs py-2">
+                    <button onClick={() => request(`/admin/messages/${item._id}`, { method: 'DELETE' }).then(loadMessages)} className="button border border-red-400/30 text-red-300 hover:bg-red-400/10 text-xs py-2 transition-transform duration-150 active:scale-95">
                       <Trash2 size={13} /> Eliminar
                     </button>
                   </div>
@@ -972,7 +1033,7 @@ export default function Admin() {
 
       {replyingMessage && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in duration-150"
           onClick={(e) => { if (e.target === e.currentTarget) setReplyingMessage(null) }}
         >
           <div className="relative w-full max-w-xl my-auto max-h-[92vh] flex flex-col rounded-3xl border border-[#8b5cf6]/40 bg-[#0d0d14] shadow-2xl overflow-hidden">
@@ -982,30 +1043,37 @@ export default function Admin() {
             </div>
             <div className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
               <div>
-                <span className="text-xs text-neutral-400">Seleccionar Preset:</span>
-                <div className="flex flex-wrap gap-2 pt-1.5">
-                  {replyPresets.map((preset, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => { setReplySubject(preset.subject); setReplyText(preset.text) }}
-                      className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-[#8b5cf6]/30 border border-white/10 text-xs text-purple-200 transition"
-                    >
-                      {preset.title}
-                    </button>
-                  ))}
+                <span className="text-xs text-neutral-400 block mb-1.5 font-medium">Seleccionar Preset:</span>
+                <div className="flex flex-wrap gap-2">
+                  {replyPresets.map((preset) => {
+                    const isSelected = selectedPresetId === preset.id
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => applyPreset(preset)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 transform active:scale-95 ${
+                          isSelected
+                            ? 'border border-[#8b5cf6] bg-[#8b5cf6]/25 text-white shadow-sm shadow-[#8b5cf6]/30'
+                            : 'border border-white/10 bg-white/5 text-neutral-400 hover:text-white hover:bg-white/10'
+                        }`}
+                      >
+                        {preset.title}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
               <label className="block text-xs text-neutral-300">Asunto
                 <input className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" value={replySubject} onChange={(e) => setReplySubject(e.target.value)} />
               </label>
               <label className="block text-xs text-neutral-300">Mensaje (desde support@pandadev.me)
-                <textarea rows="5" className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6] leading-relaxed" value={replyText} onChange={(e) => setReplyText(e.target.value)} />
+                <textarea rows="5" className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6] leading-relaxed resize-none" value={replyText} onChange={(e) => setReplyText(e.target.value)} />
               </label>
             </div>
             <div className="p-4 sm:p-5 border-t border-white/10 bg-[#0d0d14] flex justify-end gap-2.5 shrink-0">
               <button onClick={() => setReplyingMessage(null)} className="button button-outline text-xs px-4 py-2">Cancelar</button>
-              <button onClick={sendReply} disabled={sendingReply} className="button button-primary text-xs px-4 py-2">
+              <button onClick={sendReply} disabled={sendingReply} className="button button-primary text-xs px-4 py-2 transition-transform duration-150 active:scale-95 disabled:opacity-60">
                 <Send size={13} /> {sendingReply ? 'Enviando...' : 'Enviar Respuesta'}
               </button>
             </div>
