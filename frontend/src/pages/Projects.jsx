@@ -3,27 +3,6 @@ import { ArrowLeft, ArrowRight, ArrowUpRight, Grid2X2, List, X } from 'lucide-re
 import ProviderIcon from '../components/ProviderIcon'
 import { useLanguage } from '../contexts/LanguageContext'
 
-const fallbackProjects = [
-  {
-    id: 'pandacraft-tools',
-    title: 'PandaCraft Tools',
-    category: 'Minecraft Tools',
-    types: ['Minecraft Tools', 'Webs'],
-    summary: 'Herramientas visuales para diseñar estandartes, personalizar escudos y calcular encantamientos.',
-    vision: 'PandaCraft Tools reúne edición visual, cálculos y utilidades rápidas para creadores de Minecraft en una sola interfaz web.',
-    goals: 'Crear un centro rápido para diseñar y calcular recursos sin cambiar de herramienta.',
-    inspiration: 'Surgió al convertir herramientas dispersas en una experiencia web unificada.',
-    team: 'En solitario (Panda158)',
-    architecture: 'Frontend interactivo / Canvas y utilidades de cálculo',
-    images: ['https://images.unsplash.com/photo-1627856013091-fed6e4e30025?w=1200&q=85'],
-    tags: ['React', 'Canvas', 'Tailwind CSS', 'Vite'],
-    demoUrl: 'https://pandacraft.me',
-    githubUrl: 'https://github.com/DereckVC',
-    showDemoBtn: false,
-    showGithubBtn: true,
-  }
-]
-
 const categories = ['Todos', 'Webs', 'Sistemas', 'Roblox / Luau', 'Minecraft Tools', 'Bots']
 
 const projectsApi = (() => {
@@ -32,8 +11,13 @@ const projectsApi = (() => {
 })()
 
 const normalizeProject = (item) => {
-  const shortDesc = typeof item.shortDesc === 'object' ? (item.shortDesc.es || item.shortDesc.en || '') : (item.shortDesc || item.description || item.summary || '')
-  const longDesc = typeof item.longDesc === 'object' ? (item.longDesc.es || item.longDesc.en || '') : (item.longDesc || item.vision || shortDesc)
+  const shortDesc = typeof item.shortDesc === 'object' 
+    ? (item.shortDesc.es || item.shortDesc.en || '') 
+    : (item.shortDesc || item.description || item.summary || '')
+  
+  const longDesc = typeof item.longDesc === 'object' 
+    ? (item.longDesc.es || item.longDesc.en || '') 
+    : (item.longDesc || item.vision || shortDesc)
 
   const showDemo = item.showDemoBtn !== undefined 
     ? Boolean(item.showDemoBtn) 
@@ -55,14 +39,16 @@ const normalizeProject = (item) => {
     title: item.title || 'Proyecto',
     category: item.category || 'Webs',
     types: item.types?.length ? item.types : [item.category || 'Webs'],
-    summary: shortDesc,
-    vision: longDesc || 'Sin descripción disponible.',
+    summary: shortDesc || 'Sin descripción resumida disponible.',
+    vision: longDesc || 'Sin descripción detallada.',
     goals: item.goals || 'Desarrollo, despliegue y mantenimiento continuo.',
     inspiration: item.inspiration || 'Optimización de flujos y herramientas para la comunidad.',
     team: item.team || 'DereckVC (Panda158)',
     architecture: item.architecture || `${item.category || 'Web'} / Full-Stack`,
     images: imageList,
-    tags: Array.isArray(item.tags) ? item.tags : (typeof item.tags === 'string' ? item.tags.split(',').map((t) => t.trim()).filter(Boolean) : []),
+    tags: Array.isArray(item.tags) 
+      ? item.tags 
+      : (typeof item.tags === 'string' ? item.tags.split(',').map((t) => t.trim()).filter(Boolean) : []),
     demoUrl: item.demoUrl || '',
     githubUrl: item.repoUrl || item.githubUrl || '',
     showDemoBtn: showDemo,
@@ -95,7 +81,7 @@ const translations = {
     close: 'Cerrar proyecto',
     previous: 'Imagen anterior',
     next: 'Imagen siguiente',
-    noResults: 'No hay proyectos para esta categoría.',
+    noResults: 'No hay proyectos disponibles en esta categoría.',
   },
   en: {
     badge: '● PORTFOLIO · SELECTED PROJECTS',
@@ -121,7 +107,7 @@ const translations = {
     close: 'Close project',
     previous: 'Previous image',
     next: 'Next image',
-    noResults: 'There are no projects in this category.',
+    noResults: 'There are no projects available in this category.',
   },
 }
 
@@ -227,7 +213,6 @@ function ProjectModal({ project, text, onClose }) {
 
   if (!project) return null
 
-  // Condiciones estrictas que respetan la configuración del panel
   const hasDemo = Boolean(project.showDemoBtn) && Boolean(project.demoUrl)
   const hasGithub = Boolean(project.showGithubBtn) && Boolean(project.githubUrl)
 
@@ -286,47 +271,52 @@ function ProjectModal({ project, text, onClose }) {
   )
 }
 
-export default function Projects({ projects: initialProjects = fallbackProjects }) {
+export default function Projects() {
   const { language } = useLanguage()
   const text = translations[language] || translations.es
   const [activeCategory, setActiveCategory] = useState('Todos')
   const [viewMode, setViewMode] = useState('grid')
   const [selectedProject, setSelectedProject] = useState(null)
-  const [catalog, setCatalog] = useState(() => initialProjects.map(normalizeProject))
+  const [catalog, setCatalog] = useState([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let isMounted = true
 
-    // Función que sincroniza los proyectos silenciosamente
     const fetchLatestProjects = () => {
       fetch(`${projectsApi}/projects?t=${Date.now()}`)
-        .then((response) => response.ok ? response.json() : Promise.reject(new Error('Projects API unavailable')))
+        .then((response) => response.ok ? response.json() : [])
         .then((items) => {
-          if (!isMounted || !Array.isArray(items) || items.length === 0) return
+          if (!isMounted || !Array.isArray(items)) return
+          
+          // Se normalizan exactamente los proyectos de la base de datos (o array vacío si borraste todos)
           const normalized = items.map(normalizeProject)
           setCatalog(normalized)
+          setLoading(false)
 
-          // Si el usuario tiene el modal de un proyecto abierto, se actualiza también en vivo
+          // Sincronización en vivo del modal abierto
           setSelectedProject((current) => {
             if (!current) return null
             const match = normalized.find((p) => p.id === current.id || (p._id && p._id === current._id))
-            return match || current
+            return match || null
           })
         })
-        .catch(() => {})
+        .catch(() => {
+          if (isMounted) setLoading(false)
+        })
     }
 
-    // 1. Carga inmediata al entrar
+    // 1. Carga inicial
     fetchLatestProjects()
 
-    // 2. Intervalo periódico en segundo plano (cada 8 segundos)
+    // 2. Sondeo en segundo plano (cada 5 segundos)
     const intervalId = setInterval(() => {
       if (document.visibilityState === 'visible') {
         fetchLatestProjects()
       }
-    }, 8000)
+    }, 5000)
 
-    // 3. Si el usuario cambia de pestaña y regresa, actualiza al instante
+    // 3. Actualización al regresar de otra pestaña
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         fetchLatestProjects()
@@ -379,11 +369,29 @@ export default function Projects({ projects: initialProjects = fallbackProjects 
             <button className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs transition ${viewMode === 'list' ? 'border border-[#8b5cf6]/60 bg-[#8b5cf6]/20 text-white' : 'text-neutral-400 hover:text-white'}`} type="button" onClick={() => setViewMode('list')} aria-pressed={viewMode === 'list'}><List size={15} />{text.list}</button>
           </div>
         </div>
-        {viewMode === 'grid'
-          ? <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{filteredProjects.map((project) => <ProjectCard key={project.id} project={project} text={text} onSelect={setSelectedProject} />)}</div>
-          : <div className="flex w-full flex-col gap-4">{filteredProjects.map((project) => <ProjectListRow key={project.id} project={project} text={text} onSelect={setSelectedProject} />)}</div>}
-        {filteredProjects.length === 0 && <div className="glass mt-6 rounded-2xl p-8 text-center text-neutral-400">{text.noResults}</div>}
+
+        {loading ? (
+          <div className="glass mt-6 rounded-2xl p-12 text-center text-neutral-400">
+            <div className="h-6 w-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+            Cargando proyectos en tiempo real...
+          </div>
+        ) : filteredProjects.length > 0 ? (
+          viewMode === 'grid' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredProjects.map((project) => <ProjectCard key={project.id} project={project} text={text} onSelect={setSelectedProject} />)}
+            </div>
+          ) : (
+            <div className="flex w-full flex-col gap-4">
+              {filteredProjects.map((project) => <ProjectListRow key={project.id} project={project} text={text} onSelect={setSelectedProject} />)}
+            </div>
+          )
+        ) : (
+          <div className="glass mt-6 rounded-2xl p-12 text-center text-neutral-400">
+            {text.noResults}
+          </div>
+        )}
       </section>
+
       <ProjectModal key={selectedProject?.id || 'closed'} project={selectedProject} text={text} onClose={() => setSelectedProject(null)} />
     </main>
   )

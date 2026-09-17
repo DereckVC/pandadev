@@ -1,4 +1,41 @@
 import { Link } from 'react-router-dom'
+
 export default function Footer() {
-  return <footer className="site-footer"><div className="footer-inner"><div className="footer-identity"><Link className="brand" to="/"><span className="brand-mark">P</span><span className="brand-name"><span className="brand-panda">Panda</span><span className="brand-dev">Dev</span></span></Link><span className="footer-online"><i /> SYSTEMS ONLINE</span></div><small>© 2026 PandaDev. Todos los derechos reservados.</small><div className="media-row"><a className="media-discord" href="https://discord.com" target="_blank" rel="noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.5 5.4A16 16 0 0 0 15.5 4l-.5 1a14 14 0 0 0-6 0l-.5-1a16 16 0 0 0-4 1.4C1.8 9.3 1.1 13.1 1.5 17a16 16 0 0 0 5 2.5l1.2-1.7a10 10 0 0 1-1.8-.8l.4-.4c3.4 1.6 7.1 1.6 10.5 0l.4.4c-.6.3-1.2.6-1.8.8l1.2 1.7a16 16 0 0 0 5-2.5c.4-4.4-.7-8.2-2.1-11.6Z"/></svg> Discord</a><a className="media-github" href="https://github.com/DereckVC" target="_blank" rel="noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.2-3.4-1.2-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.4 1.1 2.9.8.1-.6.4-1.1.7-1.3-2.2-.3-4.6-1.1-4.6-4.9 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.6 9.6 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.8-2.3 4.7-4.6 4.9.4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg> GitHub</a><a className="media-email" href="mailto:support@pandadev.me"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5h18a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm0 3.2v.2l9 5.7 9-5.7v-.2L12 13.9 3 8.2Z"/></svg> Email</a></div></div></footer>
+  return (
+    <footer className="site-footer">
+      <div className="footer-inner">
+        <div className="footer-identity">
+          <Link className="brand" to="/">
+            <span className="brand-mark">P</span>
+            <span className="brand-name">
+              <span className="brand-panda">Panda</span>
+              <span className="brand-dev">Dev</span>
+            </span>
+          </Link>
+          <span className="footer-online"><i /> SYSTEMS ONLINE</span>
+        </div>
+        <small>© 2026 PandaDev. Todos los derechos reservados.</small>
+        <div className="media-row">
+          <a className="media-discord" href="https://discord.gg/pandadev" target="_blank" rel="noreferrer">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="M19.5 5.4A16 16 0 0 0 15.5 4l-.5 1a14 14 0 0 0-6 0l-.5-1a16 16 0 0 0-4 1.4C1.8 9.3 1.1 13.1 1.5 17a16 16 0 0 0 5 2.5l1.2-1.7a10 10 0 0 1-1.8-.8l.4-.4c3.4 1.6 7.1 1.6 10.5 0l.4.4c-.6.3-1.2.6-1.8.8l1.2 1.7a16 16 0 0 0 5-2.5c.4-4.4-.7-8.2-2.1-11.6Z"/>
+            </svg>
+            Discord
+          </a>
+          <a className="media-github" href="https://github.com/DereckVC" target="_blank" rel="noreferrer">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.2-3.4-1.2-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.4 1.1 2.9.8.1-.6.4-1.1.7-1.3-2.2-.3-4.6-1.1-4.6-4.9 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.6 9.6 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.8-2.3 4.7-4.6 4.9.4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/>
+            </svg>
+            GitHub
+          </a>
+          <a className="media-email" href="mailto:support@pandadev.me">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="M3 5h18a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm0 3.2v.2l9 5.7 9-5.7v-.2L12 13.9 3 8.2Z"/>
+            </svg>
+            Email
+          </a>
+        </div>
+      </div>
+    </footer>
+  )
 }

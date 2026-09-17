@@ -8,7 +8,6 @@ require('dotenv').config();
 
 const Project = require('./models/Project');
 const Visitor = require('./models/Visitor');
-const User = require('./models/User');
 const authRoutes = require('./routes/auth');
 const contactRoutes = require('./routes/contact');
 const adminRoutes = require('./routes/admin');
@@ -20,7 +19,7 @@ const port = process.env.PORT || 5000;
 // Requerido en Render para detectar la IP real del visitante detrás del proxy inverso
 app.set('trust proxy', 1);
 
-// Lista blanca flexible con soporte para www, apex y previews
+// Lista blanca flexible con soporte para apex, www, localhost y previsualizaciones de Vercel
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
@@ -33,7 +32,7 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // Permite peticiones sin 'origin' (móviles, curl o Render health checks)
+    // Permite peticiones sin 'origin' (móviles, curl, Postman o Render health check)
     if (!origin) return callback(null, true);
 
     const cleanOrigin = origin.replace(/\/+$/, '');
@@ -45,7 +44,7 @@ const corsOptions = {
       return callback(null, true);
     }
     
-    // Rechazo limpio sin detonar un Error 500 en preflight
+    // Rechazo limpio para no detonar un Error 500 en preflight OPTIONS
     return callback(null, false);
   },
   credentials: true,
@@ -59,11 +58,18 @@ app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
 app.use(passport.initialize());
 
-app.get('/api/health', (req, res) => res.status(mongoose.connection.readyState === 1 ? 200 : 503).json({ status: mongoose.connection.readyState === 1 ? 'ok' : 'degraded', database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected' }));
+// Health Check
+app.get('/api/health', (req, res) => res.status(mongoose.connection.readyState === 1 ? 200 : 503).json({ 
+  status: mongoose.connection.readyState === 1 ? 'ok' : 'degraded', 
+  database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected' 
+}));
+
+// Módulos de Rutas Principales
 app.use('/api/auth', authRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/admin', adminRoutes);
 
+// Sistema de métricas y visitas
 const hashIp = (ip) => crypto.createHash('sha256').update(`${ip}:${process.env.ADMIN_TOKEN || 'pandadev'}`).digest('hex');
 const isBot = (userAgent) => /bot|crawler|spider|slurp|headless|lighthouse|curl|wget/i.test(userAgent || '');
 const isAssetRequest = (path) => /\.(?:js|css|map|png|jpe?g|gif|svg|ico|webp|woff2?|ttf|pdf|xml|txt)$/i.test(path);
@@ -82,67 +88,30 @@ const recordVisit = async (req, res, next) => {
 };
 app.post('/api/visit', recordVisit, (error, req, res, next) => res.status(500).json({ message: 'Unable to record visit' }));
 
-app.get('/api/stats', requireAdmin, async (req, res) => {
-  try {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const [total, today, paths, uniqueToday, users] = await Promise.all([
-      Visitor.countDocuments(),
-      Visitor.countDocuments({ timestamp: { $gte: startOfDay } }),
-      Visitor.aggregate([{ $group: { _id: '$path', count: { $sum: 1 } } }, { $sort: { count: -1 } }, { $limit: 8 }]),
-      Visitor.distinct('ipHash', { timestamp: { $gte: startOfDay } }),
-      User.countDocuments(),
-    ]);
-    return res.json({ total, today, uniqueToday: uniqueToday.length, users, paths: paths.map(({ _id, count }) => ({ name: _id, count })) });
-  } catch (error) { return res.status(500).json({ message: 'Unable to load stats' }); }
-});
-
+// Rutas Públicas de Proyectos para el Catálogo
 app.get('/api/projects', async (req, res) => {
-  try { return res.json(await Project.find({ isPublic: true }).sort({ order: 1, createdAt: -1 })); }
-  catch (error) { return res.status(500).json({ message: 'Unable to load projects' }); }
+  try { 
+    return res.json(await Project.find({ isPublic: true }).sort({ order: 1, createdAt: -1 })); 
+  } catch (error) { 
+    return res.status(500).json({ message: 'Unable to load projects' }); 
+  }
 });
 
 app.get('/api/projects/:slug', async (req, res) => {
   try {
     const project = await Project.findOne({ slug: req.params.slug, isPublic: true });
     return project ? res.json(project) : res.status(404).json({ message: 'Project not found' });
-  } catch (error) { return res.status(500).json({ message: 'Unable to load project' }); }
-});
-
-app.get('/api/admin/projects', requireAdmin, async (req, res) => res.json(await Project.find().sort({ order: 1, createdAt: -1 })));
-app.get('/api/admin/users', requireAdmin, async (req, res) => {
-  const users = await User.find({}, 'email name avatar provider role createdAt').sort({ createdAt: -1 }).limit(500).lean();
-  return res.json(users);
-});
-app.post('/api/admin/projects', requireAdmin, async (req, res) => {
-  try { return res.status(201).json(await Project.create(req.body)); }
-  catch (error) { return res.status(400).json({ message: error.code === 11000 ? 'Slug already exists' : 'Invalid project data' }); }
-});
-
-app.put('/api/admin/projects/:id', requireAdmin, async (req, res) => {
-  try { 
-    const project = await Project.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after', runValidators: true }); 
-    return project ? res.json(project) : res.status(404).json({ message: 'Project not found' }); 
+  } catch (error) { 
+    return res.status(500).json({ message: 'Unable to load project' }); 
   }
-  catch (error) { return res.status(400).json({ message: 'Invalid project data' }); }
 });
 
-app.delete('/api/admin/projects/:id', requireAdmin, async (req, res) => {
-  try { const project = await Project.findByIdAndDelete(req.params.id); return project ? res.json({ message: 'Project deleted' }) : res.status(404).json({ message: 'Project not found' }); }
-  catch (error) { return res.status(400).json({ message: 'Invalid project id' }); }
-});
-
-app.get('/api/admin/github/repos', requireAdmin, async (req, res) => {
-  try {
-    const response = await fetch(`https://api.github.com/users/${process.env.GITHUB_USERNAME || 'DereckVC'}/repos?per_page=100&sort=updated`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'PandaDev-Admin' } });
-    if (!response.ok) return res.status(response.status).json({ message: 'GitHub API unavailable' });
-    return res.json(await response.json());
-  } catch (error) { return res.status(502).json({ message: 'Unable to reach GitHub' }); }
-});
-
+// Sincronización con GitHub (endpoint centralizado)
 app.post('/api/admin/github/sync', requireAdmin, async (req, res) => {
   try {
-    const response = await fetch(`https://api.github.com/users/${process.env.GITHUB_USERNAME || 'DereckVC'}/repos?per_page=100&sort=updated`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'PandaDev-Admin' } });
+    const response = await fetch(`https://api.github.com/users/${process.env.GITHUB_USERNAME || 'DereckVC'}/repos?per_page=100&sort=updated`, { 
+      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'PandaDev-Admin' } 
+    });
     if (!response.ok) return res.status(response.status).json({ message: 'GitHub API unavailable' });
     const repos = await response.json();
     const imported = await Promise.all(repos.filter((repo) => !repo.fork).map((repo, index) => Project.findOneAndUpdate(
@@ -164,11 +133,17 @@ app.post('/api/admin/github/sync', requireAdmin, async (req, res) => {
       { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true, runValidators: true },
     )));
     return res.json({ count: imported.length, projects: imported });
-  } catch (error) { return res.status(502).json({ message: 'Unable to synchronize GitHub repositories' }); }
+  } catch (error) { 
+    return res.status(502).json({ message: 'Unable to synchronize GitHub repositories' }); 
+  }
 });
 
+// Conexión con MongoDB Atlas y arranque del servidor
 mongoose.connect(process.env.MONGO_URI)
   .then(() => app.listen(port, () => console.log(`PandaDev API listening on port ${port}`)))
-  .catch((error) => { console.error('MongoDB connection failed:', error.message); process.exit(1); });
+  .catch((error) => { 
+    console.error('MongoDB connection failed:', error.message); 
+    process.exit(1); 
+  });
 
 module.exports = app;

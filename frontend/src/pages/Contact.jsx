@@ -8,7 +8,13 @@ const getApiUrl = () => {
   return raw.endsWith('/api') ? raw : `${raw.replace(/\/+$/, '')}/api`
 }
 const CONTACT_API = `${getApiUrl()}/contact`
+
+// Canal oficial único de soporte y contacto
 const supportEmail = 'support@pandadev.me'
+// Reemplaza este enlace por la invitación permanente a tu servidor de Discord
+const discordServerUrl = 'https://discord.gg/pandadev'
+const githubProfileUrl = 'https://github.com/DereckVC'
+
 const initialForm = { name: '', email: '', category: 'Desarrollo Web MERN', message: '' }
 
 const content = {
@@ -19,7 +25,7 @@ const content = {
     subtitle: '¿Tienes un proyecto en mente, buscas desarrollo en Roblox Studio o requieres una herramienta web? Conversemos por cualquiera de estos canales.',
     discordTitle: 'Discord Server & DM',
     discordText: 'Consultas técnicas rápidas, comunidad y soporte directo para tus ideas.',
-    discordButton: 'Abrir Discord',
+    discordButton: 'Entrar al Servidor',
     githubTitle: 'GitHub Workspace',
     githubText: 'Código abierto, utilidades y proyectos que evolucionan con cada iteración.',
     githubButton: 'Ver repositorios',
@@ -30,7 +36,7 @@ const content = {
     copy: 'Copiar',
     copied: '¡Copiado!',
     formTitle: 'Envía un Mensaje Directo',
-    formSubtitle: 'Completa los detalles y recibirás respuesta en tu correo en 24-48 horas.',
+    formSubtitle: 'Completa los detalles y recibirás confirmación inmediata en tu correo.',
     name: 'Nombre / Organización',
     namePlaceholder: 'Tu nombre o empresa',
     email: 'Tu Correo Electrónico',
@@ -41,7 +47,7 @@ const content = {
     categories: ['Desarrollo Web MERN', 'Roblox Studio / Luau', 'Bot / Automatización', 'Consulta General'],
     submit: 'Enviar Mensaje Directo',
     sending: 'Enviando...',
-    success: '¡Mensaje recibido! Te responderé pronto a tu correo.',
+    success: '¡Mensaje recibido! Te hemos enviado un acuse de recibo a tu correo.',
     error: 'No se pudo enviar el mensaje. Inténtalo de nuevo.',
   },
   en: {
@@ -51,7 +57,7 @@ const content = {
     subtitle: 'Have a project in mind, need Roblox Studio development or a web tool? Let’s talk through any of these channels.',
     discordTitle: 'Discord Server & DM',
     discordText: 'Fast technical questions, community and direct support for your ideas.',
-    discordButton: 'Open Discord',
+    discordButton: 'Join Server',
     githubTitle: 'GitHub Workspace',
     githubText: 'Open source code, utilities and projects evolving with every iteration.',
     githubButton: 'View repositories',
@@ -62,7 +68,7 @@ const content = {
     copy: 'Copy',
     copied: 'Copied!',
     formTitle: 'Send a Direct Message',
-    formSubtitle: 'Complete the details and receive a reply by email within 24-48 hours.',
+    formSubtitle: 'Complete the details and you will receive an immediate confirmation email.',
     name: 'Name / Organization',
     namePlaceholder: 'Your name or company',
     email: 'Your Email',
@@ -73,7 +79,7 @@ const content = {
     categories: ['MERN Web Development', 'Roblox Studio / Luau', 'Bot / Automation', 'General Inquiry'],
     submit: 'Send Direct Message',
     sending: 'Sending...',
-    success: 'Message received! I will reply to your email soon.',
+    success: 'Message received! An automated receipt has been sent to your email.',
     error: 'The message could not be sent. Please try again.',
   },
 }
@@ -154,7 +160,7 @@ export default function Contact() {
           <div className="p-6">
             <h2 className="text-xl font-bold text-white">{text.discordTitle}</h2>
             <p className="mt-3 min-h-[48px] text-sm leading-relaxed text-neutral-400">{text.discordText}</p>
-            <a className="mt-6 flex items-center justify-center gap-2 rounded-xl bg-[#5865F2] px-4 py-2.5 font-semibold text-white transition hover:-translate-y-0.5 hover:bg-[#4752C4]" href="https://discord.com" target="_blank" rel="noreferrer">
+            <a className="mt-6 flex items-center justify-center gap-2 rounded-xl bg-[#5865F2] px-4 py-2.5 font-semibold text-white transition hover:-translate-y-0.5 hover:bg-[#4752C4]" href={discordServerUrl} target="_blank" rel="noreferrer">
               <DiscordIcon />{text.discordButton}<ArrowUpRight size={16} />
             </a>
           </div>
@@ -168,7 +174,7 @@ export default function Contact() {
           <div className="p-6">
             <h2 className="text-xl font-bold text-white">{text.githubTitle}</h2>
             <p className="mt-3 min-h-[48px] text-sm leading-relaxed text-neutral-400">{text.githubText}</p>
-            <a className="mt-6 flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 font-semibold text-white transition hover:-translate-y-0.5 hover:bg-white/20" href="https://github.com/DereckVC" target="_blank" rel="noreferrer">
+            <a className="mt-6 flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 font-semibold text-white transition hover:-translate-y-0.5 hover:bg-white/20" href={githubProfileUrl} target="_blank" rel="noreferrer">
               <GithubIcon />{text.githubButton}<ArrowUpRight size={16} />
             </a>
           </div>
