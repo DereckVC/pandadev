@@ -1,7 +1,9 @@
 const nodemailer = require('nodemailer');
 
-const emailUser = process.env.EMAIL_USER;
-const emailPass = process.env.EMAIL_PASS;
+const emailUser = process.env.EMAIL_USER || process.env.SMTP_USER;
+const emailPass = process.env.EMAIL_PASS || process.env.SMTP_PASS;
+const frontendUrl = (process.env.FRONTEND_URL || 'https://www.pandadev.me').replace(/\/+$/, '');
+
 const sender = `"PandaDev Security" <${emailUser}>`;
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -13,7 +15,7 @@ const transporter = nodemailer.createTransport({
 
 transporter.verify()
   .then(() => console.log('✓ [SMTP]: Conexión con Gmail verificada exitosamente'))
-  .catch((error) => console.error('Error enviando email:', error.message));
+  .catch((error) => console.error('Error verificando conexión SMTP:', error.message));
 
 const emailLayout = ({ title, intro, actionLabel, link, expiry }) => `
   <div style="margin:0;padding:32px 16px;background:#09090b;color:#f5f5f5;font-family:Arial,Helvetica,sans-serif;">
@@ -50,7 +52,8 @@ const sendMail = async ({ to, subject, text, html }) => {
 };
 
 async function sendPasswordResetEmail(toEmail, resetToken) {
-  const link = `http://localhost:5173/login?reset=${resetToken}`;
+  // Enlace directo al componente ResetPassword en producción
+  const link = `${frontendUrl}/reset-password/${resetToken}`;
   return sendMail({
     to: toEmail,
     subject: 'Restablece tu contraseña de PandaDev',
@@ -66,7 +69,7 @@ async function sendPasswordResetEmail(toEmail, resetToken) {
 }
 
 async function sendVerificationEmail(toEmail, verifyToken) {
-  const link = `http://localhost:5173/login?verify=${verifyToken}`;
+  const link = `${frontendUrl}/login?verify=${verifyToken}`;
   return sendMail({
     to: toEmail,
     subject: 'Activa tu cuenta de PandaDev',

@@ -32,7 +32,7 @@ const CANONICAL_ADMIN_GITHUB = 'DereckVC';
 const jwtSecret = () => process.env.JWT_SECRET || 'pandadev-development-secret';
 
 const publicUser = (user) => ({
-  id: user.id,
+  id: user.id || user._id,
   email: user.email,
   name: user.name,
   avatar: user.avatar,
@@ -44,7 +44,7 @@ const publicUser = (user) => ({
   twoFactorEnabled: user.twoFactorEnabled
 });
 
-const createToken = (user) => jwt.sign({ id: user.id, role: user.role }, jwtSecret(), { expiresIn: '7d' });
+const createToken = (user) => jwt.sign({ id: user.id || user._id, role: user.role }, jwtSecret(), { expiresIn: '7d' });
 
 // Envía tanto la cookie como el parámetro en URL para compatibilidad total con Brave/Safari
 const sendSession = (res, user, redirect = false) => {
@@ -77,14 +77,17 @@ const isTrustedDevice = (email, deviceId, token) => {
 
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, name = '' } = req.body;
+    const rawEmail = req.body.email || req.body.mail;
+    const { password, name = '' } = req.body;
+    const email = rawEmail ? String(rawEmail).trim().toLowerCase() : '';
+
     if (!email || !password || !passwordRegex.test(password)) {
       return res.status(400).json({ message: 'La contraseña debe tener 8 caracteres, una mayúscula, una minúscula y un número.' });
     }
-    if (CANONICAL_ADMIN_EMAILS.includes(email.toLowerCase())) {
+    if (CANONICAL_ADMIN_EMAILS.includes(email)) {
       return res.status(403).json({ message: 'Este correo está reservado exclusivamente para inicio de sesión federado oficial (OAuth).' });
     }
-    if (await User.findOne({ email: email.toLowerCase() })) {
+    if (await User.findOne({ email })) {
       return res.status(409).json({ message: 'Email already registered' });
     }
     const otpCode = createOtp();
@@ -105,7 +108,10 @@ router.post('/register', async (req, res) => {
 });
 
 router.post('/login', async (req, res) => {
-  const user = await User.findOne({ email: req.body.email?.toLowerCase() }).select('+password +twoFactorSecret');
+  const rawEmail = req.body.email || req.body.mail;
+  const email = rawEmail ? String(rawEmail).trim().toLowerCase() : '';
+
+  const user = await User.findOne({ email }).select('+password +twoFactorSecret');
   if (!user || !user.password || !(await bcrypt.compare(req.body.password || '', user.password))) {
     return res.status(401).json({ message: 'Invalid email or password' });
   }
@@ -129,7 +135,9 @@ router.post('/login', async (req, res) => {
 });
 
 router.post('/verify-otp', async (req, res) => {
-  const email = req.body.email?.toLowerCase();
+  const rawEmail = req.body.email || req.body.mail;
+  const email = rawEmail ? String(rawEmail).trim().toLowerCase() : '';
+
   const user = await User.findOne({ email }).select('+password +otpCode +otpExpires');
   if (!user || !user.otpCode || user.otpCode !== String(req.body.otp || '').trim() || !user.otpExpires || user.otpExpires <= new Date()) {
     return res.status(400).json({ message: 'El código es incorrecto o ha expirado.' });
@@ -145,7 +153,10 @@ router.post('/verify-otp', async (req, res) => {
 });
 
 router.post('/verify-login-otp', async (req, res) => {
-  const user = await User.findOne({ email: req.body.email?.toLowerCase() }).select('+password +otpCode +otpExpires');
+  const rawEmail = req.body.email || req.body.mail;
+  const email = rawEmail ? String(rawEmail).trim().toLowerCase() : '';
+
+  const user = await User.findOne({ email }).select('+password +otpCode +otpExpires');
   if (!user || !user.otpCode || user.otpCode !== String(req.body.otp || '').trim() || !user.otpExpires || user.otpExpires <= new Date()) {
     return res.status(400).json({ message: 'El código es incorrecto o ha expirado.' });
   }
@@ -159,7 +170,10 @@ router.post('/verify-login-otp', async (req, res) => {
 });
 
 router.post('/resend-otp', async (req, res) => {
-  const user = await User.findOne({ email: req.body.email?.toLowerCase() }).select('+otpCode +otpExpires');
+  const rawEmail = req.body.email || req.body.mail;
+  const email = rawEmail ? String(rawEmail).trim().toLowerCase() : '';
+
+  const user = await User.findOne({ email }).select('+otpCode +otpExpires');
   if (!user) return res.status(404).json({ message: 'No encontramos una cuenta con ese correo.' });
   const otpCode = createOtp();
   user.otpCode = otpCode;
@@ -191,7 +205,7 @@ router.put('/me', requireAuth, async (req, res) => {
     const updates = {};
     if (typeof req.body.name === 'string') updates.name = req.body.name.trim().slice(0, 80);
     if (typeof req.body.discordTag === 'string') updates.discordTag = req.body.discordTag.trim().slice(0, 80);
-    const user = await User.findByIdAndUpdate(req.user.id, updates, { returnDocument: 'after', runValidators: true });
+    const user = await User.findByIdAndUpdate(req.user.id || req.user._id, updates, { returnDocument: 'after', runValidators: true });
     return res.json({ user: publicUser(user) });
   } catch (error) {
     return res.status(400).json({ message: 'Unable to update profile' });
@@ -221,7 +235,7 @@ router.post('/2fa/enable', requireAuth, async (req, res) => {
 });
 
 router.post('/2fa/disable', requireAuth, async (req, res) => {
-  const user = await User.findById(req.user.id).select('+twoFactorSecret');
+  const user = await User.findById(req.user.id || req.user._id).select('+twoFactorSecret');
   if (!user.twoFactorEnabled || !user.twoFactorSecret || !speakeasy.totp.verify({ secret: user.twoFactorSecret, encoding: 'base32', token: String(req.body.token || '').trim(), window: 1 })) {
     return res.status(400).json({ message: 'El código de Google Authenticator no es válido.' });
   }
@@ -232,8 +246,11 @@ router.post('/2fa/disable', requireAuth, async (req, res) => {
 });
 
 router.post('/forgot-password', async (req, res) => {
-  const user = await User.findOne({ email: req.body.email?.toLowerCase() }).select('+resetPasswordToken +resetPasswordExpires');
-  if (!user) return res.json({ message: 'If that email exists, a reset link has been generated' });
+  const rawEmail = req.body.email || req.body.mail;
+  const email = rawEmail ? String(rawEmail).trim().toLowerCase() : '';
+
+  const user = await User.findOne({ email }).select('+resetPasswordToken +resetPasswordExpires');
+  if (!user) return res.json({ message: 'Si el correo existe, recibirás un enlace de recuperación.' });
   const token = crypto.randomBytes(32).toString('hex');
   user.resetPasswordToken = token;
   user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
@@ -295,7 +312,7 @@ const updateProfile = async (req, res) => {
     if (!req.body.currentPassword || !req.body.newPassword || req.body.newPassword.length < 8) {
       return res.status(400).json({ message: 'La contraseña actual y una nueva contraseña de 8 caracteres son obligatorias.' });
     }
-    const userWithPassword = await User.findById(req.user.id).select('+password');
+    const userWithPassword = await User.findById(req.user.id || req.user._id).select('+password');
     if (!userWithPassword.password || !(await bcrypt.compare(req.body.currentPassword, userWithPassword.password))) {
       return res.status(401).json({ message: 'La contraseña actual no es correcta.' });
     }
@@ -325,7 +342,7 @@ router.put('/change-password', requireAuth, async (req, res) => {
   if (!req.body.currentPassword || !passwordRegex.test(req.body.newPassword || '')) {
     return res.status(400).json({ message: 'La nueva contraseña debe tener 8 caracteres, una mayúscula, una minúscula y un número.' });
   }
-  const user = await User.findById(req.user.id).select('+password');
+  const user = await User.findById(req.user.id || req.user._id).select('+password');
   if (!user.password || !(await bcrypt.compare(req.body.currentPassword, user.password))) {
     return res.status(401).json({ message: 'La contraseña actual no es correcta.' });
   }
@@ -339,7 +356,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   passport.use(new (require('passport-google-oauth20').Strategy)({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: process.env.GOOGLE_CALLBACK_URL
+    callbackURL: process.env.GOOGLE_CALLBACK_URL || 'https://pandadev-api.onrender.com/api/auth/google/callback'
   }, async (accessToken, refreshToken, profile, done) => {
     try {
       done(null, await upsertOAuthUser(profile, 'google'));
@@ -362,7 +379,7 @@ if (process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET) {
   passport.use(new (require('passport-discord').Strategy)({
     clientID: process.env.DISCORD_CLIENT_ID,
     clientSecret: process.env.DISCORD_CLIENT_SECRET,
-    callbackURL: process.env.DISCORD_CALLBACK_URL,
+    callbackURL: process.env.DISCORD_CALLBACK_URL || 'https://pandadev-api.onrender.com/api/auth/discord/callback',
     scope: ['identify', 'email']
   }, async (accessToken, refreshToken, profile, done) => {
     try {
@@ -388,7 +405,7 @@ if (githubConfigured) {
   passport.use(new GitHubStrategy({
     clientID: process.env.GITHUB_CLIENT_ID,
     clientSecret: process.env.GITHUB_CLIENT_SECRET,
-    callbackURL: process.env.GITHUB_CALLBACK_URL || `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/auth/github/callback`,
+    callbackURL: process.env.GITHUB_CALLBACK_URL || 'https://pandadev-api.onrender.com/api/auth/github/callback',
     scope: ['user:email', 'read:user'],
   }, async (accessToken, refreshToken, profile, done) => {
     try {
