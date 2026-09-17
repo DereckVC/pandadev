@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, ArrowRight, ArrowUpRight, Grid2X2, List, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ArrowUpRight, Grid2X2, List, X, Layers, Users, Cpu } from 'lucide-react'
 import ProviderIcon from '../components/ProviderIcon'
 import { useLanguage } from '../contexts/LanguageContext'
 
-const categories = ['Todos', 'Webs', 'Sistemas', 'Roblox / Luau', 'Minecraft Tools', 'Bots']
+const categories = ['Todos', 'Web', 'Sistemas', 'Roblox / Luau', 'Minecraft Tools', 'Bots', 'Otros']
 
 const projectsApi = (() => {
   const raw = import.meta.env.VITE_API_URL || '/api'
@@ -13,7 +13,7 @@ const projectsApi = (() => {
 const normalizeProject = (item) => {
   const shortDesc = typeof item.shortDesc === 'object' 
     ? (item.shortDesc.es || item.shortDesc.en || '') 
-    : (item.shortDesc || item.description || item.summary || '')
+    : (item.shortDesc || item.description || '')
   
   const longDesc = typeof item.longDesc === 'object' 
     ? (item.longDesc.es || item.longDesc.en || '') 
@@ -37,10 +37,10 @@ const normalizeProject = (item) => {
     id: item._id || item.slug || item.id || String(Math.random()),
     _id: item._id,
     title: item.title || 'Proyecto',
-    category: item.category || 'Webs',
-    types: item.types?.length ? item.types : [item.category || 'Webs'],
+    category: item.category || 'Web',
+    types: item.types?.length ? item.types : [item.category || 'Web'],
     summary: shortDesc || 'Sin descripción resumida disponible.',
-    vision: longDesc || 'Sin descripción detallada.',
+    vision: item.vision || longDesc || 'Sin visión detallada registrada.',
     goals: item.goals || 'Desarrollo, despliegue y mantenimiento continuo.',
     inspiration: item.inspiration || 'Optimización de flujos y herramientas para la comunidad.',
     team: item.team || 'DereckVC (Panda158)',
@@ -64,14 +64,10 @@ const translations = {
     published: 'Proyectos Publicados',
     details: 'Ver detalles',
     all: 'Todos',
-    webs: 'Webs',
-    systems: 'Sistemas',
-    roblox: 'Roblox / Luau',
-    minecraft: 'Minecraft Tools',
-    bots: 'Bots',
     list: 'Lista',
     cards: 'Tarjetas',
     vision: 'Visión & Propósito',
+    goals: 'Objetivos',
     inspiration: 'Inspiración',
     team: 'Equipo',
     architecture: 'Arquitectura / Rol',
@@ -90,14 +86,10 @@ const translations = {
     published: 'Published Projects',
     details: 'View details',
     all: 'All',
-    webs: 'Web',
-    systems: 'Systems',
-    roblox: 'Roblox / Luau',
-    minecraft: 'Minecraft Tools',
-    bots: 'Bots',
     list: 'List',
     cards: 'Cards',
     vision: 'Vision & Purpose',
+    goals: 'Goals',
     inspiration: 'Inspiration',
     team: 'Team',
     architecture: 'Architecture / Role',
@@ -110,15 +102,6 @@ const translations = {
     noResults: 'There are no projects available in this category.',
   },
 }
-
-const categoryLabel = (category, text) => ({
-  Todos: text.all,
-  Webs: text.webs,
-  Sistemas: text.systems,
-  'Roblox / Luau': text.roblox,
-  'Minecraft Tools': text.minecraft,
-  Bots: text.bots,
-}[category] || category)
 
 function ProjectTags({ tags }) {
   return (
@@ -145,7 +128,7 @@ function ProjectCard({ project, text, onSelect }) {
       <div className="project-image-wrap project-card-banner">
         <img src={project.images[0]} alt={`${project.title} preview`} loading="lazy" />
         <div className="project-image-overlay" />
-        <span className="project-category-badge">{categoryLabel(project.category, text)}</span>
+        <span className="project-category-badge">{project.category}</span>
       </div>
       <div className="project-card-body project-compact-body">
         <h2>{project.title}</h2>
@@ -173,7 +156,7 @@ function ProjectListRow({ project, text, onSelect }) {
       <div className="flex w-full min-w-0 items-center gap-4">
         <img className="h-20 w-28 shrink-0 rounded-xl object-cover" src={project.images[0]} alt={`${project.title} thumbnail`} loading="lazy" />
         <div className="min-w-0">
-          <span className="project-category-badge project-list-category">{categoryLabel(project.category, text)}</span>
+          <span className="project-category-badge project-list-category">{project.category}</span>
           <h2 className="mt-2 truncate text-lg font-bold text-white">{project.title}</h2>
           <ProjectTags tags={project.tags.slice(0, 3)} />
         </div>
@@ -217,53 +200,118 @@ function ProjectModal({ project, text, onClose }) {
   const hasGithub = Boolean(project.showGithubBtn) && Boolean(project.githubUrl)
 
   return (
-    <div className="project-overlay fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 sm:p-6" role="presentation" onClick={onClose}>
-      <article className="project-modal max-w-5xl w-full bg-[#0d0d14] border border-[#8b5cf6]/40 rounded-3xl overflow-hidden shadow-2xl relative max-h-[92vh] flex flex-col" role="dialog" aria-modal="true" aria-labelledby={`project-modal-${project.id}`} onClick={(event) => event.stopPropagation()}>
-        <button className="modal-close z-30 bg-black/70" type="button" onClick={onClose} aria-label={text.close}><X size={20} /></button>
-        <button className="absolute left-5 top-5 z-30 rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-xs font-semibold text-white transition hover:border-[#8b5cf6] hover:bg-[#8b5cf6]" type="button" onClick={onClose}>← Volver a Proyectos</button>
-        <div className="relative h-64 sm:h-72 w-full overflow-hidden bg-black">
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6" role="presentation" onClick={onClose}>
+      {/* Contenedor ancho horizontal para PC */}
+      <article 
+        className="w-full max-w-5xl xl:max-w-6xl bg-[#0d0d14] border border-[#8b5cf6]/40 rounded-3xl overflow-hidden shadow-2xl relative max-h-[92vh] flex flex-col"
+        role="dialog" 
+        aria-modal="true" 
+        onClick={(event) => event.stopPropagation()}
+      >
+        {/* Barra superior con botón volver y cerrar */}
+        <div className="absolute top-4 left-4 right-4 z-30 flex items-center justify-between pointer-events-none">
+          <button 
+            className="pointer-events-auto rounded-xl border border-white/10 bg-black/60 backdrop-blur-md px-3.5 py-2 text-xs font-semibold text-white transition hover:border-[#8b5cf6] hover:bg-[#8b5cf6]" 
+            type="button" 
+            onClick={onClose}
+          >
+            ← Volver a Proyectos
+          </button>
+          <button 
+            className="pointer-events-auto grid h-9 w-9 place-items-center rounded-xl bg-black/60 backdrop-blur-md border border-white/10 text-neutral-300 hover:text-white hover:bg-white/10 transition" 
+            type="button" 
+            onClick={onClose}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Banner de altura balanceada (no invasivo verticalmente) */}
+        <div className="relative h-44 sm:h-56 md:h-64 lg:h-72 w-full overflow-hidden bg-black shrink-0">
           <img className="h-full w-full object-cover" src={project.images[currentImageIndex]} alt={`${project.title} ${currentImageIndex + 1}`} />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d14] via-transparent to-black/40" />
+
           {project.images.length > 1 && (
             <>
-              <button className="absolute left-4 top-1/2 z-20 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-black/60 text-white transition hover:border-[#8b5cf6] hover:bg-[#8b5cf6]" type="button" onClick={() => setCurrentImageIndex((index) => (index - 1 + project.images.length) % project.images.length)} aria-label={text.previous}><ArrowLeft size={18} /></button>
-              <button className="absolute right-4 top-1/2 z-20 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-black/60 text-white transition hover:border-[#8b5cf6] hover:bg-[#8b5cf6]" type="button" onClick={() => setCurrentImageIndex((index) => (index + 1) % project.images.length)} aria-label={text.next}><ArrowRight size={18} /></button>
-              <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 gap-2">
-                {project.images.map((image, index) => <button className={`h-2 w-2 rounded-full transition ${index === currentImageIndex ? 'bg-[#a855f7] shadow-[0_0_10px_rgba(168,85,247,0.8)]' : 'bg-white/50'}`} key={image} type="button" onClick={() => setCurrentImageIndex(index)} aria-label={`Imagen ${index + 1}`} />)}
-              </div>
-              <div className="absolute bottom-3 left-1/2 z-20 flex max-w-[80%] -translate-x-1/2 gap-2 overflow-x-auto rounded-xl bg-black/50 p-2">
-                {project.images.map((image, index) => <button key={`thumb-${image}`} type="button" onClick={() => setCurrentImageIndex(index)} className={`h-10 w-16 shrink-0 overflow-hidden rounded-lg border-2 ${index === currentImageIndex ? 'border-[#a855f7]' : 'border-transparent opacity-70'}`}><img className="h-full w-full object-cover" src={image} alt="" /></button>)}
-              </div>
+              <button className="absolute left-4 top-1/2 z-20 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-black/60 text-white transition hover:bg-[#8b5cf6]" type="button" onClick={() => setCurrentImageIndex((index) => (index - 1 + project.images.length) % project.images.length)}>
+                <ArrowLeft size={16} />
+              </button>
+              <button className="absolute right-4 top-1/2 z-20 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-black/60 text-white transition hover:bg-[#8b5cf6]" type="button" onClick={() => setCurrentImageIndex((index) => (index + 1) % project.images.length)}>
+                <ArrowRight size={16} />
+              </button>
             </>
           )}
         </div>
-        <div className="overflow-y-auto p-6 sm:p-8">
-          <span className="project-kicker">{categoryLabel(project.category, text)}</span>
-          <h2 id={`project-modal-${project.id}`} className="mt-2 text-3xl font-black tracking-tight text-white sm:text-4xl">{project.title}</h2>
-          <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-            <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-[#c4b5fd]">{text.vision}</h3>
-            <p className="mt-3 text-sm leading-7 text-neutral-300">{project.vision}</p>
-            <h3 className="mt-6 text-sm font-bold uppercase tracking-[0.12em] text-[#c4b5fd]">Objetivos</h3>
-            <p className="mt-3 text-sm leading-7 text-neutral-300">{project.goals}</p>
-            <h3 className="mt-6 text-sm font-bold uppercase tracking-[0.12em] text-[#c4b5fd]">{text.inspiration}</h3>
-            <p className="mt-3 text-sm leading-7 text-neutral-300">{project.inspiration}</p>
+
+        {/* Cuerpo del Modal: Distribución Horizontal en 2 Columnas para PC */}
+        <div className="overflow-y-auto p-6 sm:p-8 lg:p-10">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="inline-block px-3 py-1 rounded-full text-xs font-mono font-bold tracking-wider uppercase bg-[#8b5cf6]/15 text-[#c4b5fd] border border-[#8b5cf6]/30">
+              {project.category}
+            </span>
           </div>
-          <div className="mt-6 grid gap-5 md:grid-cols-[1fr_auto]">
-            <div>
-              <h3 className="text-sm font-bold text-white">{text.team}</h3>
-              <p className="mt-3 text-sm text-neutral-400">{project.team}</p>
+
+          <h2 className="mt-2.5 text-2xl sm:text-4xl font-black tracking-tight text-white">{project.title}</h2>
+          <div className="mt-3"><ProjectTags tags={project.tags} /></div>
+
+          {/* Grid de 2 Columnas en pantallas de escritorio */}
+          <div className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            {/* Columna Izquierda (7 columnas): Narrativa técnica */}
+            <div className="lg:col-span-7 space-y-6">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+                <h3 className="text-xs font-bold uppercase tracking-[0.14em] text-[#c4b5fd] flex items-center gap-2">
+                  <Layers size={15} /> {text.vision}
+                </h3>
+                <p className="mt-3 text-sm leading-relaxed text-neutral-300 whitespace-pre-wrap">{project.vision}</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+                  <h3 className="text-xs font-bold uppercase tracking-[0.14em] text-[#c4b5fd]">{text.goals}</h3>
+                  <p className="mt-2.5 text-xs sm:text-sm leading-relaxed text-neutral-300 whitespace-pre-wrap">{project.goals}</p>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+                  <h3 className="text-xs font-bold uppercase tracking-[0.14em] text-[#c4b5fd]">{text.inspiration}</h3>
+                  <p className="mt-2.5 text-xs sm:text-sm leading-relaxed text-neutral-300 whitespace-pre-wrap">{project.inspiration}</p>
+                </div>
+              </div>
             </div>
-            <div>
-              <h3 className="text-sm font-bold text-white">{text.technologies}</h3>
-              <div className="mt-3"><ProjectTags tags={project.tags} /></div>
+
+            {/* Columna Derecha (5 columnas): Ficha Técnica y Enlaces */}
+            <div className="lg:col-span-5 space-y-5">
+              <div className="rounded-2xl border border-white/10 bg-[#111118]/80 p-5 space-y-4">
+                <div>
+                  <span className="text-[11px] font-mono text-neutral-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Users size={13} /> {text.team}
+                  </span>
+                  <p className="mt-1 text-sm font-semibold text-white">{project.team}</p>
+                </div>
+
+                <div className="pt-2 border-t border-white/5">
+                  <span className="text-[11px] font-mono text-neutral-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Cpu size={13} /> {text.architecture}
+                  </span>
+                  <p className="mt-1 text-sm text-neutral-300 leading-relaxed">{project.architecture}</p>
+                </div>
+              </div>
+
+              {/* Botones de Acción */}
+              {(hasDemo || hasGithub) && (
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                  {hasDemo && (
+                    <a className="button button-primary flex-1 justify-center py-3 text-sm font-semibold" href={project.demoUrl} target="_blank" rel="noreferrer">
+                      {text.demo} <ArrowUpRight size={16} />
+                    </a>
+                  )}
+                  {hasGithub && (
+                    <a className="button button-outline flex-1 justify-center py-3 text-sm font-semibold" href={project.githubUrl} target="_blank" rel="noreferrer">
+                      <ProviderIcon provider="github" /> {text.github}
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
-            <div className="md:max-w-xs">
-              <h3 className="text-sm font-bold text-white">{text.architecture}</h3>
-              <p className="mt-3 text-sm leading-relaxed text-neutral-400">{project.architecture}</p>
-            </div>
-          </div>
-          <div className="mt-8 flex flex-wrap justify-end gap-3">
-            {hasDemo && <a className="button button-primary" href={project.demoUrl} target="_blank" rel="noreferrer">{text.demo}<ArrowUpRight size={16} /></a>}
-            {hasGithub && <a className="button button-outline" href={project.githubUrl} target="_blank" rel="noreferrer"><ProviderIcon provider="github" />{text.github}</a>}
           </div>
         </div>
       </article>
@@ -285,16 +333,13 @@ export default function Projects() {
 
     const fetchLatestProjects = () => {
       fetch(`${projectsApi}/projects?t=${Date.now()}`)
-        .then((response) => response.ok ? response.json() : [])
+        .then((response) => (response.ok ? response.json() : []))
         .then((items) => {
           if (!isMounted || !Array.isArray(items)) return
-          
-          // Se normalizan exactamente los proyectos de la base de datos (o array vacío si borraste todos)
           const normalized = items.map(normalizeProject)
           setCatalog(normalized)
           setLoading(false)
 
-          // Sincronización en vivo del modal abierto
           setSelectedProject((current) => {
             if (!current) return null
             const match = normalized.find((p) => p.id === current.id || (p._id && p._id === current._id))
@@ -306,21 +351,13 @@ export default function Projects() {
         })
     }
 
-    // 1. Carga inicial
     fetchLatestProjects()
-
-    // 2. Sondeo en segundo plano (cada 5 segundos)
     const intervalId = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        fetchLatestProjects()
-      }
+      if (document.visibilityState === 'visible') fetchLatestProjects()
     }, 5000)
 
-    // 3. Actualización al regresar de otra pestaña
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        fetchLatestProjects()
-      }
+      if (document.visibilityState === 'visible') fetchLatestProjects()
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
@@ -331,9 +368,11 @@ export default function Projects() {
     }
   }, [])
 
-  const filteredProjects = useMemo(() => activeCategory === 'Todos'
-    ? catalog
-    : catalog.filter((project) => project.types.includes(activeCategory)), [activeCategory, catalog])
+  const filteredProjects = useMemo(() => {
+    return activeCategory === 'Todos'
+      ? catalog
+      : catalog.filter((project) => project.types.includes(activeCategory) || project.category === activeCategory)
+  }, [activeCategory, catalog])
 
   return (
     <main className="projects-page">
@@ -360,7 +399,7 @@ export default function Projects() {
                 aria-pressed={activeCategory === category} 
                 onClick={() => setActiveCategory(category)}
               >
-                {categoryLabel(category, text)}
+                {category}
               </button>
             ))}
           </div>
@@ -378,11 +417,15 @@ export default function Projects() {
         ) : filteredProjects.length > 0 ? (
           viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredProjects.map((project) => <ProjectCard key={project.id} project={project} text={text} onSelect={setSelectedProject} />)}
+              {filteredProjects.map((project) => (
+                <ProjectCard key={project.id} project={project} text={text} onSelect={setSelectedProject} />
+              ))}
             </div>
           ) : (
             <div className="flex w-full flex-col gap-4">
-              {filteredProjects.map((project) => <ProjectListRow key={project.id} project={project} text={text} onSelect={setSelectedProject} />)}
+              {filteredProjects.map((project) => (
+                <ProjectListRow key={project.id} project={project} text={text} onSelect={setSelectedProject} />
+              ))}
             </div>
           )
         ) : (

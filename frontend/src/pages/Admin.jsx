@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { 
   Activity, Check, Code2, Download, Eye, EyeOff, Inbox, 
-  Mail, Pencil, Plus, RefreshCw, Send, Shield, Trash2, Upload, Users, X 
+  Mail, Pencil, Plus, RefreshCw, Send, Shield, Trash2, Upload, Users, X, Info
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
@@ -13,6 +13,12 @@ const emptyProject = {
   category: 'Web',
   tags: '',
   bannerUrl: '',
+  // Campos del modal detallado
+  vision: '',
+  goals: '',
+  inspiration: '',
+  team: 'DereckVC (Panda158)',
+  architecture: 'Frontend interactivo / Canvas y Luau',
   demoUrl: '',
   repoUrl: '',
   showGithubBtn: true,
@@ -40,6 +46,24 @@ const replyPresets = [
 
 const categories = ['Todos', 'Web', 'Sistemas', 'Roblox / Luau', 'Minecraft Tools', 'Bots', 'Otros']
 
+// Componente de Switch interactivo
+function ToggleSwitch({ checked, onChange, label, description }) {
+  return (
+    <label className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-[#8b5cf6]/40 cursor-pointer transition select-none">
+      <div className="pr-4">
+        <span className="block text-xs font-semibold text-white">{label}</span>
+        {description && <span className="block text-[11px] text-neutral-400 mt-0.5">{description}</span>}
+      </div>
+      <div 
+        onClick={(e) => { e.preventDefault(); onChange(!checked) }}
+        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 ${checked ? 'bg-[#8b5cf6]' : 'bg-neutral-800'}`}
+      >
+        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+      </div>
+    </label>
+  )
+}
+
 export default function Admin() {
   const { user, api } = useAuth()
   const apiBase = api?.endsWith('/api') ? api : `${(api || '/api').replace(/\/+$/, '')}/api`
@@ -50,6 +74,7 @@ export default function Admin() {
   const navigate = useNavigate()
 
   const [activeTab, setActiveTab] = useState('overview')
+  const [formSection, setFormSection] = useState('card') // 'card' o 'modal'
   const [stats, setStats] = useState(null)
   const [messages, setMessages] = useState([])
   const [projects, setProjects] = useState([])
@@ -118,13 +143,17 @@ export default function Admin() {
     e.preventDefault()
     setModalError('')
     try {
-      const cleanDesc = projectForm.shortDesc?.trim() || projectForm.title.trim()
+      const cleanShortDesc = projectForm.shortDesc?.trim() || projectForm.title.trim()
       const payload = {
         ...projectForm,
-        // Compatibilidad total con el esquema de MongoDB
-        description: cleanDesc,
-        shortDesc: cleanDesc,
-        longDesc: cleanDesc,
+        description: cleanShortDesc,
+        shortDesc: cleanShortDesc,
+        longDesc: projectForm.vision?.trim() || cleanShortDesc,
+        vision: projectForm.vision?.trim() || cleanShortDesc,
+        goals: projectForm.goals?.trim() || 'Desarrollo continuo.',
+        inspiration: projectForm.inspiration?.trim() || 'Comunidad PandaDev.',
+        team: projectForm.team?.trim() || 'DereckVC (Panda158)',
+        architecture: projectForm.architecture?.trim() || `${projectForm.category} / Full-Stack`,
         category: projectForm.category || 'Web',
         tags: typeof projectForm.tags === 'string'
           ? projectForm.tags.split(',').map((t) => t.trim()).filter(Boolean)
@@ -144,10 +173,10 @@ export default function Admin() {
 
       setModalOpen(false)
       setEditingProject(null)
-      setNotice('Proyecto guardado correctamente.')
+      setNotice('Proyecto guardado correctamente en la base de datos.')
       await loadProjects()
     } catch (err) {
-      setModalError(err.message || 'No se pudo guardar el proyecto. Revisa los datos.')
+      setModalError(err.message || 'No se pudo guardar el proyecto.')
     }
   }
 
@@ -170,7 +199,7 @@ export default function Admin() {
         body: JSON.stringify({ isPublic: nextVal })
       })
       await loadProjects()
-      setNotice(`Proyecto ${nextVal ? 'publicado' : 'ocultado'}.`)
+      setNotice(`Proyecto ${nextVal ? 'publicado en la web' : 'marcado como borrador'}.`)
     } catch (err) {
       setError(err.message)
     }
@@ -235,7 +264,7 @@ export default function Admin() {
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(projects, null, 2))
     const downloadAnchor = document.createElement('a')
     downloadAnchor.setAttribute('href', dataStr)
-    downloadAnchor.setAttribute('download', `pandadev_projects_backup_${Date.now()}.json`)
+    downloadAnchor.setAttribute('download', `pandadev_projects_${Date.now()}.json`)
     document.body.appendChild(downloadAnchor)
     downloadAnchor.click()
     downloadAnchor.remove()
@@ -277,7 +306,7 @@ export default function Admin() {
         body: JSON.stringify({ subject: replySubject, replyText })
       })
       setReplyingMessage(null)
-      setNotice('Respuesta enviada correctamente por correo.')
+      setNotice('Respuesta enviada con éxito por correo.')
       await loadMessages()
     } catch (err) {
       setError(err.message)
@@ -368,7 +397,7 @@ export default function Admin() {
               <div className="rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-5 sm:p-6">
                 <h3 className="font-bold text-white mb-4">Acciones Rápidas</h3>
                 <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => { setEditingProject(null); setProjectForm(emptyProject); setModalError(''); setModalOpen(true); }} className="button button-primary text-xs py-3 justify-center">
+                  <button onClick={() => { setEditingProject(null); setProjectForm(emptyProject); setFormSection('card'); setModalError(''); setModalOpen(true); }} className="button button-primary text-xs py-3 justify-center">
                     <Plus size={16} /> Crear Proyecto
                   </button>
                   <button onClick={syncGithub} disabled={syncingGithub} className="button button-outline text-xs py-3 justify-center">
@@ -391,7 +420,7 @@ export default function Admin() {
           <section className="space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-4 bg-[#0d0d14]/90 p-4 rounded-2xl border border-white/10">
               <div className="flex flex-wrap gap-2">
-                <button onClick={() => { setEditingProject(null); setProjectForm(emptyProject); setModalError(''); setModalOpen(true); }} className="button button-primary">
+                <button onClick={() => { setEditingProject(null); setProjectForm(emptyProject); setFormSection('card'); setModalError(''); setModalOpen(true); }} className="button button-primary">
                   <Plus size={16} /> Añadir Nuevo Proyecto
                 </button>
                 <button onClick={syncGithub} disabled={syncingGithub} className="button button-outline">
@@ -426,31 +455,38 @@ export default function Admin() {
                       <p className="text-xs text-neutral-400 truncate">{project.category} · Slug: <code className="text-purple-300">/{project.slug}</code></p>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-3">
+                      {/* Switch rápido de Visibilidad */}
                       <button
                         onClick={() => toggleVisibility(project)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition ${
-                          project.isPublic ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-neutral-600 bg-neutral-800 text-neutral-400'
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
+                          project.isPublic ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-neutral-700 bg-neutral-800 text-neutral-400'
                         }`}
                       >
                         {project.isPublic ? <Eye size={13} /> : <EyeOff size={13} />}
                         {project.isPublic ? 'Visible' : 'Oculto'}
                       </button>
 
+                      {/* Switch rápido de Demo */}
                       <button
-                        className={`rounded-full px-3 py-1 text-xs transition ${project.showDemoBtn ? 'bg-purple-400/15 text-purple-300' : 'bg-white/10 text-neutral-400'}`}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
+                          project.showDemoBtn ? 'border-purple-500/40 bg-purple-500/15 text-purple-300' : 'border-neutral-700 bg-neutral-800 text-neutral-400'
+                        }`}
                         type="button"
                         onClick={() => toggleDemo(project)}
                       >
-                        Demo {project.showDemoBtn ? 'On' : 'Off'}
+                        Demo {project.showDemoBtn ? 'ON' : 'OFF'}
                       </button>
 
+                      {/* Switch rápido de GitHub */}
                       <button
-                        className={`rounded-full px-3 py-1 text-xs transition ${project.showGithubBtn ? 'bg-emerald-400/15 text-emerald-300' : 'bg-white/10 text-neutral-400'}`}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
+                          project.showGithubBtn ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300' : 'border-neutral-700 bg-neutral-800 text-neutral-400'
+                        }`}
                         type="button"
                         onClick={() => toggleGithub(project)}
                       >
-                        GitHub {project.showGithubBtn ? 'On' : 'Off'}
+                        GitHub {project.showGithubBtn ? 'ON' : 'OFF'}
                       </button>
 
                       <button
@@ -463,14 +499,20 @@ export default function Admin() {
                             slug: project.slug || '',
                             category: project.category || 'Web',
                             bannerUrl: project.bannerUrl || '',
+                            shortDesc: project.shortDesc || project.description || '',
+                            vision: project.vision || project.longDesc || project.shortDesc || '',
+                            goals: project.goals || '',
+                            inspiration: project.inspiration || '',
+                            team: project.team || 'DereckVC (Panda158)',
+                            architecture: project.architecture || '',
                             demoUrl: project.demoUrl || '',
                             repoUrl: project.repoUrl || project.githubUrl || '',
-                            shortDesc: project.shortDesc || project.description || '',
                             tags: Array.isArray(project.tags) ? project.tags.join(', ') : (project.tags || ''),
                             showGithubBtn: project.showGithubBtn ?? project.githubVisible ?? true,
                             showDemoBtn: project.showDemoBtn ?? project.demoVisible ?? false,
                             isPublic: project.isPublic ?? true,
                           })
+                          setFormSection('card')
                           setModalError('')
                           setModalOpen(true)
                         }}
@@ -493,7 +535,7 @@ export default function Admin() {
           </section>
         )}
 
-        {/* 3. Mensajes de Contacto con Presets */}
+        {/* 3. Mensajes de Contacto */}
         {activeTab === 'messages' && (
           <section className="space-y-4">
             {messages.length === 0 ? (
@@ -567,7 +609,7 @@ export default function Admin() {
           </section>
         )}
 
-        {/* 5. Estado del Servidor */}
+        {/* 5. Estado del Servidor (Sin endpoints técnicos ni credenciales expuestas) */}
         {activeTab === 'settings' && (
           <section className="space-y-6">
             <div className="rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-6 space-y-4">
@@ -578,16 +620,16 @@ export default function Admin() {
                   <span className="font-mono text-white">https://www.pandadev.me</span>
                 </div>
                 <div className="p-4 bg-black/40 rounded-xl border border-white/5">
-                  <span className="block text-xs text-neutral-500 uppercase">Correo de Soporte</span>
+                  <span className="block text-xs text-neutral-500 uppercase">Correo de Soporte Oficial</span>
                   <span className="font-mono text-purple-300">support@pandadev.me</span>
                 </div>
                 <div className="p-4 bg-black/40 rounded-xl border border-white/5">
-                  <span className="block text-xs text-neutral-500 uppercase">Backend API</span>
-                  <span className="font-mono text-neutral-300">{apiBase}</span>
+                  <span className="block text-xs text-neutral-500 uppercase">Estado Operativo</span>
+                  <span className="font-mono text-emerald-400">Servidores en Línea (SSL Activo)</span>
                 </div>
                 <div className="p-4 bg-black/40 rounded-xl border border-white/5">
                   <span className="block text-xs text-neutral-500 uppercase">Base de Datos</span>
-                  <span className="font-mono text-emerald-400">MongoDB Atlas (Online)</span>
+                  <span className="font-mono text-emerald-400">MongoDB Atlas (Cluster Conectado)</span>
                 </div>
               </div>
             </div>
@@ -595,16 +637,19 @@ export default function Admin() {
         )}
       </div>
 
-      {/* Modal de Crear / Editar Proyecto (Diseño Scrollable Resistente a Resize) */}
+      {/* Editor Completo de Proyectos (Organizado con pestañas y mini-mensajes) */}
       {modalOpen && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
           onClick={(e) => { if (e.target === e.currentTarget) setModalOpen(false) }}
         >
-          <div className="relative w-full max-w-2xl my-auto max-h-[92vh] flex flex-col rounded-3xl border border-[#8b5cf6]/40 bg-[#0d0d14] shadow-2xl overflow-hidden">
+          <div className="relative w-full max-w-3xl my-auto max-h-[92vh] flex flex-col rounded-3xl border border-[#8b5cf6]/40 bg-[#0d0d14] shadow-2xl overflow-hidden">
             {/* Cabecera Fija */}
             <div className="flex items-center justify-between p-5 border-b border-white/10 shrink-0 bg-[#0d0d14]">
-              <h2 className="text-xl font-bold text-white">{editingProject ? 'Editar Proyecto' : 'Nuevo Proyecto'}</h2>
+              <div>
+                <h2 className="text-xl font-bold text-white">{editingProject ? 'Editar Proyecto' : 'Nuevo Proyecto'}</h2>
+                <p className="text-xs text-neutral-400 mt-0.5">Configura tanto la tarjeta del catálogo como la ventana flotante detallada.</p>
+              </div>
               <button 
                 type="button" 
                 onClick={() => setModalOpen(false)}
@@ -614,7 +659,29 @@ export default function Admin() {
               </button>
             </div>
 
-            {/* Cuerpo del Formulario con Scroll Interno */}
+            {/* Selector de sub-sección del formulario */}
+            <div className="flex border-b border-white/10 bg-black/30 p-2 gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setFormSection('card')}
+                className={`flex-1 py-2 rounded-xl text-xs font-semibold transition ${
+                  formSection === 'card' ? 'bg-[#8b5cf6] text-white shadow-md' : 'text-neutral-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                🎴 Portada / Card (Catálogo)
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormSection('modal')}
+                className={`flex-1 py-2 rounded-xl text-xs font-semibold transition ${
+                  formSection === 'modal' ? 'bg-[#8b5cf6] text-white shadow-md' : 'text-neutral-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                🔍 Ventana Flotante (Modal Detallado)
+              </button>
+            </div>
+
+            {/* Formulario */}
             <form id="project-form" onSubmit={saveProject} className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
               {modalError && (
                 <div className="p-3.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs leading-relaxed">
@@ -622,128 +689,215 @@ export default function Admin() {
                 </div>
               )}
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="text-xs text-neutral-300">
-                  Título *
-                  <input 
-                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
-                    value={projectForm.title} 
-                    onChange={(e) => setProjectForm({ ...projectForm, title: e.target.value })} 
-                    required 
-                  />
-                </label>
-                <label className="text-xs text-neutral-300">
-                  Slug (URL)
-                  <input 
-                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
-                    value={projectForm.slug} 
-                    onChange={(e) => setProjectForm({ ...projectForm, slug: e.target.value })} 
-                    placeholder="autogenerado si se deja vacío"
-                  />
-                </label>
-                <label className="text-xs text-neutral-300">
-                  Categoría
-                  <select 
-                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#111118] px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
-                    value={projectForm.category} 
-                    onChange={(e) => setProjectForm({ ...projectForm, category: e.target.value })}
-                  >
-                    {categories.filter((c) => c !== 'Todos').map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-xs text-neutral-300">
-                  Imagen / Banner URL
-                  <input 
-                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
-                    value={projectForm.bannerUrl} 
-                    onChange={(e) => setProjectForm({ ...projectForm, bannerUrl: e.target.value })} 
-                  />
-                </label>
-                <label className="text-xs text-neutral-300">
-                  Demo URL
-                  <input 
-                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
-                    value={projectForm.demoUrl} 
-                    onChange={(e) => setProjectForm({ ...projectForm, demoUrl: e.target.value })} 
-                  />
-                </label>
-                <label className="text-xs text-neutral-300">
-                  GitHub Repo URL
-                  <input 
-                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
-                    value={projectForm.repoUrl} 
-                    onChange={(e) => setProjectForm({ ...projectForm, repoUrl: e.target.value })} 
-                  />
-                </label>
-              </div>
+              {/* SECCIÓN 1: CARD DEL CATÁLOGO */}
+              {formSection === 'card' && (
+                <div className="space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="text-xs text-neutral-300">
+                      Título del Proyecto *
+                      <input 
+                        className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
+                        value={projectForm.title} 
+                        onChange={(e) => setProjectForm({ ...projectForm, title: e.target.value })} 
+                        required 
+                      />
+                      <span className="text-[11px] text-neutral-500 mt-1 block">Nombre principal visible en la tarjeta.</span>
+                    </label>
 
-              <label className="block text-xs text-neutral-300">
-                Descripción Resumida *
-                <textarea
-                  className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]"
-                  rows="3"
-                  value={projectForm.shortDesc}
-                  onChange={(e) => setProjectForm({ ...projectForm, shortDesc: e.target.value })}
-                  required
-                />
-              </label>
+                    <label className="text-xs text-neutral-300">
+                      Slug (URL amigable)
+                      <input 
+                        className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
+                        value={projectForm.slug} 
+                        onChange={(e) => setProjectForm({ ...projectForm, slug: e.target.value })} 
+                        placeholder="ej: mi-nuevo-proyecto"
+                      />
+                      <span className="text-[11px] text-neutral-500 mt-1 block">Ruta URL (se genera automáticamente si se deja vacío).</span>
+                    </label>
 
-              <label className="block text-xs text-neutral-300">
-                Tags (separados por coma)
-                <input
-                  className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]"
-                  value={projectForm.tags}
-                  onChange={(e) => setProjectForm({ ...projectForm, tags: e.target.value })}
-                  placeholder="React, Luau, Tailwind, API"
-                />
-              </label>
+                    <label className="text-xs text-neutral-300">
+                      Categoría
+                      <select 
+                        className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#111118] px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
+                        value={projectForm.category} 
+                        onChange={(e) => setProjectForm({ ...projectForm, category: e.target.value })}
+                      >
+                        {categories.filter((c) => c !== 'Todos').map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                      <span className="text-[11px] text-neutral-500 mt-1 block">Define en qué filtro del catálogo aparecerá.</span>
+                    </label>
 
-              <div className="flex flex-wrap gap-4 text-xs text-neutral-300 pt-1">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(projectForm.isPublic)}
-                    onChange={(e) => setProjectForm({ ...projectForm, isPublic: e.target.checked })}
+                    <label className="text-xs text-neutral-300">
+                      Imagen de Portada (Banner URL)
+                      <input 
+                        className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
+                        value={projectForm.bannerUrl} 
+                        onChange={(e) => setProjectForm({ ...projectForm, bannerUrl: e.target.value })} 
+                        placeholder="https://images.unsplash.com/..."
+                      />
+                      <span className="text-[11px] text-neutral-500 mt-1 block">Foto de la tarjeta y cabecera del modal.</span>
+                    </label>
+                  </div>
+
+                  <label className="block text-xs text-neutral-300">
+                    Descripción Breve (Card Summary) *
+                    <textarea
+                      className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]"
+                      rows="2"
+                      value={projectForm.shortDesc}
+                      onChange={(e) => setProjectForm({ ...projectForm, shortDesc: e.target.value })}
+                      required
+                    />
+                    <span className="text-[11px] text-neutral-500 mt-1 block">Texto corto visible directamente en la cuadrícula de proyectos.</span>
+                  </label>
+
+                  <label className="block text-xs text-neutral-300">
+                    Tags de Tecnologías
+                    <input
+                      className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]"
+                      value={projectForm.tags}
+                      onChange={(e) => setProjectForm({ ...projectForm, tags: e.target.value })}
+                      placeholder="React, Luau, Tailwind, API"
+                    />
+                    <span className="text-[11px] text-neutral-500 mt-1 block">Separados por coma. Aparecen como insignias en la card.</span>
+                  </label>
+
+                  <ToggleSwitch
+                    checked={projectForm.isPublic}
+                    onChange={(val) => setProjectForm({ ...projectForm, isPublic: val })}
+                    label="Publicar Proyecto"
+                    description="Si está desactivado, se guardará como borrador y no aparecerá en el catálogo público."
                   />
-                  Visible en la Web (Público)
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(projectForm.showGithubBtn)}
-                    onChange={(e) => setProjectForm({ ...projectForm, showGithubBtn: e.target.checked })}
-                  />
-                  Botón GitHub
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(projectForm.showDemoBtn)}
-                    onChange={(e) => setProjectForm({ ...projectForm, showDemoBtn: e.target.checked })}
-                  />
-                  Botón Demo
-                </label>
-              </div>
+                </div>
+              )}
+
+              {/* SECCIÓN 2: VENTANA FLOTANTE (MODAL DETALLADO) */}
+              {formSection === 'modal' && (
+                <div className="space-y-4">
+                  <label className="block text-xs text-neutral-300">
+                    Visión & Propósito
+                    <textarea
+                      className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]"
+                      rows="3"
+                      value={projectForm.vision}
+                      onChange={(e) => setProjectForm({ ...projectForm, vision: e.target.value })}
+                      placeholder="Explica qué problema resuelve este sistema..."
+                    />
+                    <span className="text-[11px] text-neutral-500 mt-1 block">Aparece en el bloque principal al abrir la ventana flotante.</span>
+                  </label>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="text-xs text-neutral-300">
+                      Objetivos Técnicos
+                      <textarea
+                        className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]"
+                        rows="3"
+                        value={projectForm.goals}
+                        onChange={(e) => setProjectForm({ ...projectForm, goals: e.target.value })}
+                        placeholder="Metas de rendimiento, persistencia, etc."
+                      />
+                      <span className="text-[11px] text-neutral-500 mt-1 block">Bloque 'Objetivos' dentro del modal.</span>
+                    </label>
+
+                    <label className="text-xs text-neutral-300">
+                      Inspiración
+                      <textarea
+                        className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]"
+                        rows="3"
+                        value={projectForm.inspiration}
+                        onChange={(e) => setProjectForm({ ...projectForm, inspiration: e.target.value })}
+                        placeholder="Origen de la idea o motivación..."
+                      />
+                      <span className="text-[11px] text-neutral-500 mt-1 block">Bloque 'Inspiración' dentro del modal.</span>
+                    </label>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="text-xs text-neutral-300">
+                      Equipo / Desarrollador
+                      <input 
+                        className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
+                        value={projectForm.team} 
+                        onChange={(e) => setProjectForm({ ...projectForm, team: e.target.value })} 
+                      />
+                      <span className="text-[11px] text-neutral-500 mt-1 block">Ej: En solitario (Panda158).</span>
+                    </label>
+
+                    <label className="text-xs text-neutral-300">
+                      Arquitectura & Rol
+                      <input 
+                        className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
+                        value={projectForm.architecture} 
+                        onChange={(e) => setProjectForm({ ...projectForm, architecture: e.target.value })} 
+                      />
+                      <span className="text-[11px] text-neutral-500 mt-1 block">Ej: Frontend interactivo / Canvas y Luau.</span>
+                    </label>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2 pt-2">
+                    <div className="space-y-2">
+                      <label className="text-xs text-neutral-300">
+                        Demo URL (Enlace del Proyecto)
+                        <input 
+                          className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
+                          value={projectForm.demoUrl} 
+                          onChange={(e) => setProjectForm({ ...projectForm, demoUrl: e.target.value })} 
+                          placeholder="https://pandacraft.me"
+                        />
+                      </label>
+                      <ToggleSwitch
+                        checked={projectForm.showDemoBtn}
+                        onChange={(val) => setProjectForm({ ...projectForm, showDemoBtn: val })}
+                        label="Mostrar Botón 'Ver proyecto'"
+                        description="Habilita el botón morado de acceso directo a la demo."
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs text-neutral-300">
+                        GitHub Repo URL
+                        <input 
+                          className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
+                          value={projectForm.repoUrl} 
+                          onChange={(e) => setProjectForm({ ...projectForm, repoUrl: e.target.value })} 
+                          placeholder="https://github.com/DereckVC/..."
+                        />
+                      </label>
+                      <ToggleSwitch
+                        checked={projectForm.showGithubBtn}
+                        onChange={(val) => setProjectForm({ ...projectForm, showGithubBtn: val })}
+                        label="Mostrar Botón 'GitHub'"
+                        description="Habilita el botón con icono para visitar el código abierto."
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </form>
 
-            {/* Pie Fijo con Botón de Envío */}
-            <div className="p-4 sm:p-5 border-t border-white/10 bg-[#0d0d14] flex justify-end gap-2.5 shrink-0">
-              <button 
-                type="button" 
-                onClick={() => setModalOpen(false)}
-                className="button button-outline text-xs px-4 py-2.5"
-              >
-                Cancelar
-              </button>
-              <button 
-                form="project-form" 
-                type="submit" 
-                className="button button-primary text-xs px-5 py-2.5 font-semibold"
-              >
-                Guardar Proyecto
-              </button>
+            {/* Pie Fijo con Botón Guardar */}
+            <div className="p-4 sm:p-5 border-t border-white/10 bg-[#0d0d14] flex items-center justify-between shrink-0">
+              <span className="text-[11px] text-neutral-500 flex items-center gap-1.5">
+                <Info size={13} /> Guarda tus cambios para verlos reflejados en tiempo real.
+              </span>
+              <div className="flex gap-2">
+                <button 
+                  type="button" 
+                  onClick={() => setModalOpen(false)}
+                  className="button button-outline text-xs px-4 py-2.5"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  form="project-form" 
+                  type="submit" 
+                  className="button button-primary text-xs px-5 py-2.5 font-semibold"
+                >
+                  Guardar Proyecto
+                </button>
+              </div>
             </div>
           </div>
         </div>
