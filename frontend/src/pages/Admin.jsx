@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { 
-  Activity, Check, Code2, Download, Eye, EyeOff, Inbox, 
-  Mail, Pencil, Plus, RefreshCw, Send, Shield, Trash2, Upload, Users, X, Info
+  Activity, Check, Code2, Download, Eye, EyeOff, Globe, Inbox, 
+  Layers, LogOut, Mail, Menu, Pencil, Plus, RefreshCw, Send, Shield, 
+  Trash2, Upload, Users, X, Info, ArrowLeft, Cpu
 } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 const emptyProject = {
@@ -13,7 +14,6 @@ const emptyProject = {
   category: 'Web',
   tags: '',
   bannerUrl: '',
-  // Campos del modal detallado
   vision: '',
   goals: '',
   inspiration: '',
@@ -46,26 +46,29 @@ const replyPresets = [
 
 const categories = ['Todos', 'Web', 'Sistemas', 'Roblox / Luau', 'Minecraft Tools', 'Bots', 'Otros']
 
-// Componente de Switch interactivo
-function ToggleSwitch({ checked, onChange, label, description }) {
+// Componente Toggle Switch interactivo
+function ToggleSwitch({ checked, onChange, label, description, size = 'md' }) {
+  const isSm = size === 'sm'
   return (
-    <label className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-[#8b5cf6]/40 cursor-pointer transition select-none">
-      <div className="pr-4">
-        <span className="block text-xs font-semibold text-white">{label}</span>
-        {description && <span className="block text-[11px] text-neutral-400 mt-0.5">{description}</span>}
+    <div 
+      onClick={(e) => { e.stopPropagation(); onChange(!checked) }}
+      className={`flex items-center gap-2.5 cursor-pointer select-none ${isSm ? '' : 'p-3 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-[#8b5cf6]/40 justify-between'}`}
+    >
+      {label && (
+        <div>
+          <span className={`block font-semibold text-white ${isSm ? 'text-[11px]' : 'text-xs'}`}>{label}</span>
+          {description && <span className="block text-[11px] text-neutral-400">{description}</span>}
+        </div>
+      )}
+      <div className={`relative inline-flex shrink-0 items-center rounded-full transition-colors duration-200 ${isSm ? 'h-5 w-9' : 'h-6 w-11'} ${checked ? 'bg-[#8b5cf6]' : 'bg-neutral-800'}`}>
+        <span className={`inline-block rounded-full bg-white transition-transform duration-200 ${isSm ? 'h-3.5 w-3.5' : 'h-4 w-4'} ${checked ? (isSm ? 'translate-x-4.5' : 'translate-x-6') : 'translate-x-1'}`} />
       </div>
-      <div 
-        onClick={(e) => { e.preventDefault(); onChange(!checked) }}
-        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 ${checked ? 'bg-[#8b5cf6]' : 'bg-neutral-800'}`}
-      >
-        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
-      </div>
-    </label>
+    </div>
   )
 }
 
 export default function Admin() {
-  const { user, api } = useAuth()
+  const { user, api, logout } = useAuth()
   const apiBase = api?.endsWith('/api') ? api : `${(api || '/api').replace(/\/+$/, '')}/api`
   const authHeaders = () => ({
     'Content-Type': 'application/json',
@@ -74,7 +77,8 @@ export default function Admin() {
   const navigate = useNavigate()
 
   const [activeTab, setActiveTab] = useState('overview')
-  const [formSection, setFormSection] = useState('card') // 'card' o 'modal'
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  const [formSection, setFormSection] = useState('card')
   const [stats, setStats] = useState(null)
   const [messages, setMessages] = useState([])
   const [projects, setProjects] = useState([])
@@ -173,7 +177,7 @@ export default function Admin() {
 
       setModalOpen(false)
       setEditingProject(null)
-      setNotice('Proyecto guardado correctamente en la base de datos.')
+      setNotice('Proyecto guardado en la base de datos.')
       await loadProjects()
     } catch (err) {
       setModalError(err.message || 'No se pudo guardar el proyecto.')
@@ -181,11 +185,11 @@ export default function Admin() {
   }
 
   const deleteProject = async (id) => {
-    if (!window.confirm('¿Eliminar definitivamente este proyecto de la base de datos?')) return
+    if (!window.confirm('¿Eliminar definitivamente este proyecto?')) return
     try {
       await request(`/admin/projects/${id}`, { method: 'DELETE' })
       await loadProjects()
-      setNotice('Proyecto eliminado con éxito.')
+      setNotice('Proyecto eliminado.')
     } catch (err) {
       setError(err.message)
     }
@@ -199,7 +203,7 @@ export default function Admin() {
         body: JSON.stringify({ isPublic: nextVal })
       })
       await loadProjects()
-      setNotice(`Proyecto ${nextVal ? 'publicado en la web' : 'marcado como borrador'}.`)
+      setNotice(`Proyecto ${nextVal ? 'publicado' : 'ocultado'}.`)
     } catch (err) {
       setError(err.message)
     }
@@ -277,15 +281,15 @@ export default function Admin() {
     reader.onload = async (event) => {
       try {
         const parsed = JSON.parse(event.target.result)
-        if (!Array.isArray(parsed)) throw new Error('El archivo JSON debe contener un arreglo de proyectos.')
+        if (!Array.isArray(parsed)) throw new Error('El archivo debe ser un arreglo de proyectos.')
         for (const item of parsed) {
           const { _id, createdAt, updatedAt, __v, ...cleanItem } = item
           await request('/admin/projects', { method: 'POST', body: JSON.stringify(cleanItem) })
         }
         await loadProjects()
-        setNotice(`Se importaron ${parsed.length} proyecto(s) correctamente.`)
+        setNotice(`Se importaron ${parsed.length} proyecto(s).`)
       } catch (err) {
-        setError(`Error al importar archivo: ${err.message}`)
+        setError(`Error al importar: ${err.message}`)
       }
     }
     reader.readAsText(file)
@@ -306,7 +310,7 @@ export default function Admin() {
         body: JSON.stringify({ subject: replySubject, replyText })
       })
       setReplyingMessage(null)
-      setNotice('Respuesta enviada con éxito por correo.')
+      setNotice('Respuesta enviada correctamente por correo.')
       await loadMessages()
     } catch (err) {
       setError(err.message)
@@ -317,46 +321,145 @@ export default function Admin() {
 
   if (!user || user.role !== 'admin') return null
 
-  const tabs = [
-    ['overview', '📊 Vista General'],
-    ['projects', '💻 Proyectos'],
-    ['messages', `📩 Mensajes (${messages.filter((m) => !m.read).length})`],
-    ['users', '👥 Usuarios'],
-    ['settings', '⚙️ Estado del Servidor']
+  const menuSections = [
+    {
+      label: 'General',
+      items: [
+        { id: 'overview', label: 'Dashboard', icon: <Activity size={17} /> },
+        { id: 'projects', label: 'Catálogo Proyectos', icon: <Code2 size={17} />, badge: projects.length },
+      ]
+    },
+    {
+      label: 'Comunicaciones',
+      items: [
+        { id: 'messages', label: 'Mensajes Recibidos', icon: <Mail size={17} />, badge: messages.filter((m) => !m.read).length, badgeAlert: true },
+      ]
+    },
+    {
+      label: 'Administración',
+      items: [
+        { id: 'users', label: 'Usuarios y Roles', icon: <Users size={17} /> },
+        { id: 'settings', label: 'Estado del Servidor', icon: <Shield size={17} /> },
+      ]
+    }
   ]
 
-  return (
-    <main className="min-h-screen px-4 py-8 sm:px-6 lg:px-12 bg-[#07070a]">
-      <div className="mx-auto max-w-7xl">
-        <header className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <span className="inline-flex rounded-full border border-[#8b5cf6]/40 bg-[#8b5cf6]/10 px-4 py-1.5 text-xs font-mono tracking-wider text-[#d8b4fe]">
-              ● CONTROL DE SISTEMAS · PANEL ADMINISTRADOR
+  // Contenido de la barra lateral Quantum
+  const sidebarContent = (
+    <div className="flex flex-col h-full bg-[#0d0d14] border-r border-white/10 p-5 select-none">
+      {/* Tarjeta de Usuario estilo Quantum */}
+      <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-white/[0.03] border border-white/5 mb-6">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#8b5cf6] text-white font-black text-sm shadow-md">
+          {(user.name || user.email || 'A')[0].toUpperCase()}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-bold text-white truncate">{user.name || 'Administrador'}</p>
+          <p className="text-[11px] text-neutral-400 truncate">{user.email}</p>
+          <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-[#8b5cf6]/20 text-[#c4b5fd] border border-[#8b5cf6]/30">
+            ADMIN WORKSPACE
+          </span>
+        </div>
+      </div>
+
+      {/* Menú Categorizado */}
+      <div className="flex-1 space-y-6 overflow-y-auto pr-1">
+        {menuSections.map((sec) => (
+          <div key={sec.label} className="space-y-1.5">
+            <span className="px-3 text-[10px] font-mono font-bold uppercase tracking-wider text-neutral-500">
+              {sec.label}
             </span>
-            <h1 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-5xl">
+            {sec.items.map((item) => {
+              const isActive = activeTab === item.id
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => { setActiveTab(item.id); setMobileSidebarOpen(false) }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                    isActive
+                      ? 'bg-[#8b5cf6]/15 text-white border-l-2 border-[#8b5cf6] pl-3 shadow-sm'
+                      : 'text-neutral-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <span className="flex items-center gap-2.5">
+                    <span className={isActive ? 'text-[#a855f7]' : 'text-neutral-500'}>{item.icon}</span>
+                    {item.label}
+                  </span>
+                  {item.badge !== undefined && item.badge > 0 && (
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      item.badgeAlert ? 'bg-red-500 text-white' : 'bg-white/10 text-neutral-300'
+                    }`}>
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* Botones Inferiores estilo Quantum */}
+      <div className="pt-4 mt-auto border-t border-white/10 space-y-2">
+        <Link
+          to="/"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold text-neutral-300 bg-white/5 hover:bg-white/10 hover:text-white transition border border-white/5"
+        >
+          <ArrowLeft size={14} /> Volver al Inicio
+        </Link>
+        <button
+          type="button"
+          onClick={() => { if (logout) logout(); navigate('/') }}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-red-400 hover:text-red-300 transition"
+        >
+          <LogOut size={13} /> Cerrar Sesión
+        </button>
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="min-h-screen bg-[#07070a] flex flex-col md:flex-row">
+      {/* Sidebar Fijo en Desktop estilo Quantum */}
+      <aside className="hidden md:block w-72 shrink-0 sticky top-0 h-screen">
+        {sidebarContent}
+      </aside>
+
+      {/* Barra Superior Móvil con Botón Hamburger del Sidebar */}
+      <div className="md:hidden flex items-center justify-between p-4 border-b border-white/10 bg-[#0d0d14]">
+        <button
+          onClick={() => setMobileSidebarOpen(true)}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-semibold text-white"
+        >
+          <Menu size={16} /> Menú Admin
+        </button>
+        <span className="text-xs font-mono text-[#c4b5fd]">Command Center</span>
+      </div>
+
+      {/* Drawer Móvil del Sidebar */}
+      {mobileSidebarOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex">
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setMobileSidebarOpen(false)} />
+          <div className="relative w-72 max-w-[85vw] h-full z-10 animate-in slide-in-from-left duration-200">
+            {sidebarContent}
+          </div>
+        </div>
+      )}
+
+      {/* Contenido Principal a la Derecha */}
+      <main className="flex-1 p-4 sm:p-6 lg:p-10 max-w-6xl overflow-y-auto">
+        <header className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <span className="inline-flex rounded-full border border-[#8b5cf6]/40 bg-[#8b5cf6]/10 px-3 py-1 text-[11px] font-mono tracking-wider text-[#d8b4fe]">
+              ● PANEL ADMINISTRATIVO PRINCIPAL
+            </span>
+            <h1 className="mt-2 text-2xl sm:text-4xl font-black tracking-tight text-white">
               PandaDev <span className="text-[#a855f7]">Command Center</span>
             </h1>
           </div>
           <span className="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 px-3 py-1.5 rounded-xl font-mono self-start sm:self-center">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            SISTEMAS ONLINE
+            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" /> SISTEMAS ONLINE
           </span>
         </header>
-
-        {/* Pestañas Principales */}
-        <div className="mb-8 flex flex-wrap gap-2 rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-2">
-          {tabs.map(([id, label]) => (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
-                activeTab === id ? 'bg-[#8b5cf6] text-white shadow-lg' : 'text-neutral-400 hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
 
         {notice && (
           <div className="mb-5 flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-200">
@@ -371,7 +474,7 @@ export default function Admin() {
           </div>
         )}
 
-        {/* 1. Vista General */}
+        {/* 1. Dashboard / Vista General */}
         {activeTab === 'overview' && (
           <section className="space-y-6">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -397,11 +500,11 @@ export default function Admin() {
               <div className="rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-5 sm:p-6">
                 <h3 className="font-bold text-white mb-4">Acciones Rápidas</h3>
                 <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => { setEditingProject(null); setProjectForm(emptyProject); setFormSection('card'); setModalError(''); setModalOpen(true); }} className="button button-primary text-xs py-3 justify-center">
+                  <button onClick={() => { setEditingProject(null); setProjectForm(emptyProject); setFormSection('card'); setModalError(''); setModalOpen(true) }} className="button button-primary text-xs py-3 justify-center">
                     <Plus size={16} /> Crear Proyecto
                   </button>
                   <button onClick={syncGithub} disabled={syncingGithub} className="button button-outline text-xs py-3 justify-center">
-                    <RefreshCw size={16} className={syncingGithub ? 'animate-spin' : ''} /> Sincronizar GitHub
+                    <RefreshCw size={16} className={syncingGithub ? 'animate-spin' : ''} /> Sync GitHub
                   </button>
                   <button onClick={exportProjectsJson} className="button button-outline text-xs py-3 justify-center">
                     <Download size={16} /> Exportar Backup
@@ -415,12 +518,12 @@ export default function Admin() {
           </section>
         )}
 
-        {/* 2. Catálogo de Proyectos */}
+        {/* 2. Catálogo de Proyectos con Switches Reales */}
         {activeTab === 'projects' && (
           <section className="space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-4 bg-[#0d0d14]/90 p-4 rounded-2xl border border-white/10">
               <div className="flex flex-wrap gap-2">
-                <button onClick={() => { setEditingProject(null); setProjectForm(emptyProject); setFormSection('card'); setModalError(''); setModalOpen(true); }} className="button button-primary">
+                <button onClick={() => { setEditingProject(null); setProjectForm(emptyProject); setFormSection('card'); setModalError(''); setModalOpen(true) }} className="button button-primary">
                   <Plus size={16} /> Añadir Nuevo Proyecto
                 </button>
                 <button onClick={syncGithub} disabled={syncingGithub} className="button button-outline">
@@ -441,10 +544,10 @@ export default function Admin() {
 
             <div className="grid gap-4">
               {projects.length === 0 ? (
-                <EmptyState text="No hay proyectos en la base de datos. Pulsa 'Añadir Nuevo Proyecto' o 'Sincronizar con GitHub'." />
+                <EmptyState text="No hay proyectos registrados en MongoDB Atlas." />
               ) : (
                 projects.map((project) => (
-                  <article key={project._id} className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-4 sm:p-5 md:flex-row md:items-center">
+                  <article key={project._id} className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-4 sm:p-5 lg:flex-row lg:items-center">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2.5 mb-1">
                         <h2 className="font-bold text-base sm:text-lg text-white truncate">{project.title}</h2>
@@ -455,42 +558,31 @@ export default function Admin() {
                       <p className="text-xs text-neutral-400 truncate">{project.category} · Slug: <code className="text-purple-300">/{project.slug}</code></p>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3">
-                      {/* Switch rápido de Visibilidad */}
-                      <button
-                        onClick={() => toggleVisibility(project)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
-                          project.isPublic ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-neutral-700 bg-neutral-800 text-neutral-400'
-                        }`}
-                      >
-                        {project.isPublic ? <Eye size={13} /> : <EyeOff size={13} />}
-                        {project.isPublic ? 'Visible' : 'Oculto'}
-                      </button>
+                    {/* Fila de Switches Interactivos Reales */}
+                    <div className="flex flex-wrap items-center gap-4 bg-black/40 p-2.5 rounded-2xl border border-white/5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-neutral-400">Visible</span>
+                        <ToggleSwitch size="sm" checked={project.isPublic} onChange={() => toggleVisibility(project)} />
+                      </div>
 
-                      {/* Switch rápido de Demo */}
-                      <button
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
-                          project.showDemoBtn ? 'border-purple-500/40 bg-purple-500/15 text-purple-300' : 'border-neutral-700 bg-neutral-800 text-neutral-400'
-                        }`}
-                        type="button"
-                        onClick={() => toggleDemo(project)}
-                      >
-                        Demo {project.showDemoBtn ? 'ON' : 'OFF'}
-                      </button>
+                      <div className="h-4 w-[1px] bg-white/10 hidden sm:block" />
 
-                      {/* Switch rápido de GitHub */}
-                      <button
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
-                          project.showGithubBtn ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300' : 'border-neutral-700 bg-neutral-800 text-neutral-400'
-                        }`}
-                        type="button"
-                        onClick={() => toggleGithub(project)}
-                      >
-                        GitHub {project.showGithubBtn ? 'ON' : 'OFF'}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-neutral-400">Demo</span>
+                        <ToggleSwitch size="sm" checked={project.showDemoBtn} onChange={() => toggleDemo(project)} />
+                      </div>
 
+                      <div className="h-4 w-[1px] bg-white/10 hidden sm:block" />
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-neutral-400">GitHub</span>
+                        <ToggleSwitch size="sm" checked={project.showGithubBtn} onChange={() => toggleGithub(project)} />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
                       <button
-                        className="button button-outline text-xs px-3 py-1.5"
+                        className="button button-outline text-xs px-3 py-2"
                         type="button"
                         onClick={() => {
                           setEditingProject(project._id)
@@ -521,7 +613,7 @@ export default function Admin() {
                       </button>
 
                       <button
-                        className="button border border-red-400/30 text-red-300 hover:bg-red-400/10 text-xs px-2.5 py-1.5"
+                        className="button border border-red-400/30 text-red-300 hover:bg-red-400/10 text-xs px-2.5 py-2"
                         type="button"
                         onClick={() => deleteProject(project._id)}
                       >
@@ -535,11 +627,11 @@ export default function Admin() {
           </section>
         )}
 
-        {/* 3. Mensajes de Contacto */}
+        {/* 3. Mensajes */}
         {activeTab === 'messages' && (
           <section className="space-y-4">
             {messages.length === 0 ? (
-              <EmptyState text="No hay mensajes de contacto registrados." />
+              <EmptyState text="No hay mensajes de contacto pendientes." />
             ) : (
               messages.map((item) => (
                 <article key={item._id} className={`p-5 sm:p-6 rounded-2xl border bg-[#0d0d14]/90 ${item.read ? 'border-white/10' : 'border-[#8b5cf6]/50 shadow-[0_0_15px_rgba(139,92,246,0.15)]'}`}>
@@ -609,7 +701,7 @@ export default function Admin() {
           </section>
         )}
 
-        {/* 5. Estado del Servidor (Sin endpoints técnicos ni credenciales expuestas) */}
+        {/* 5. Estado del Servidor */}
         {activeTab === 'settings' && (
           <section className="space-y-6">
             <div className="rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-6 space-y-4">
@@ -624,7 +716,7 @@ export default function Admin() {
                   <span className="font-mono text-purple-300">support@pandadev.me</span>
                 </div>
                 <div className="p-4 bg-black/40 rounded-xl border border-white/5">
-                  <span className="block text-xs text-neutral-500 uppercase">Estado Operativo</span>
+                  <span className="block text-xs text-neutral-500 uppercase">Estado de Infraestructura</span>
                   <span className="font-mono text-emerald-400">Servidores en Línea (SSL Activo)</span>
                 </div>
                 <div className="p-4 bg-black/40 rounded-xl border border-white/5">
@@ -635,20 +727,19 @@ export default function Admin() {
             </div>
           </section>
         )}
-      </div>
+      </main>
 
-      {/* Editor Completo de Proyectos (Organizado con pestañas y mini-mensajes) */}
+      {/* Editor Completo de Proyectos con Pestañas y Switches */}
       {modalOpen && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
           onClick={(e) => { if (e.target === e.currentTarget) setModalOpen(false) }}
         >
           <div className="relative w-full max-w-3xl my-auto max-h-[92vh] flex flex-col rounded-3xl border border-[#8b5cf6]/40 bg-[#0d0d14] shadow-2xl overflow-hidden">
-            {/* Cabecera Fija */}
             <div className="flex items-center justify-between p-5 border-b border-white/10 shrink-0 bg-[#0d0d14]">
               <div>
                 <h2 className="text-xl font-bold text-white">{editingProject ? 'Editar Proyecto' : 'Nuevo Proyecto'}</h2>
-                <p className="text-xs text-neutral-400 mt-0.5">Configura tanto la tarjeta del catálogo como la ventana flotante detallada.</p>
+                <p className="text-xs text-neutral-400 mt-0.5">Configura la card del catálogo y la ventana flotante detallada.</p>
               </div>
               <button 
                 type="button" 
@@ -659,7 +750,6 @@ export default function Admin() {
               </button>
             </div>
 
-            {/* Selector de sub-sección del formulario */}
             <div className="flex border-b border-white/10 bg-black/30 p-2 gap-2 shrink-0">
               <button
                 type="button"
@@ -681,7 +771,6 @@ export default function Admin() {
               </button>
             </div>
 
-            {/* Formulario */}
             <form id="project-form" onSubmit={saveProject} className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
               {modalError && (
                 <div className="p-3.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs leading-relaxed">
@@ -701,7 +790,7 @@ export default function Admin() {
                         onChange={(e) => setProjectForm({ ...projectForm, title: e.target.value })} 
                         required 
                       />
-                      <span className="text-[11px] text-neutral-500 mt-1 block">Nombre principal visible en la tarjeta.</span>
+                      <span className="text-[11px] text-neutral-500 mt-1 block">Nombre visible en la card principal.</span>
                     </label>
 
                     <label className="text-xs text-neutral-300">
@@ -710,9 +799,9 @@ export default function Admin() {
                         className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
                         value={projectForm.slug} 
                         onChange={(e) => setProjectForm({ ...projectForm, slug: e.target.value })} 
-                        placeholder="ej: mi-nuevo-proyecto"
+                        placeholder="autogenerado si se deja vacío"
                       />
-                      <span className="text-[11px] text-neutral-500 mt-1 block">Ruta URL (se genera automáticamente si se deja vacío).</span>
+                      <span className="text-[11px] text-neutral-500 mt-1 block">Ruta directa: /proyectos/slug</span>
                     </label>
 
                     <label className="text-xs text-neutral-300">
@@ -726,7 +815,7 @@ export default function Admin() {
                           <option key={c} value={c}>{c}</option>
                         ))}
                       </select>
-                      <span className="text-[11px] text-neutral-500 mt-1 block">Define en qué filtro del catálogo aparecerá.</span>
+                      <span className="text-[11px] text-neutral-500 mt-1 block">Filtro en el que se ubicará en la web.</span>
                     </label>
 
                     <label className="text-xs text-neutral-300">
@@ -735,9 +824,9 @@ export default function Admin() {
                         className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
                         value={projectForm.bannerUrl} 
                         onChange={(e) => setProjectForm({ ...projectForm, bannerUrl: e.target.value })} 
-                        placeholder="https://images.unsplash.com/..."
+                        placeholder="https://..."
                       />
-                      <span className="text-[11px] text-neutral-500 mt-1 block">Foto de la tarjeta y cabecera del modal.</span>
+                      <span className="text-[11px] text-neutral-500 mt-1 block">Foto principal de la card y el modal.</span>
                     </label>
                   </div>
 
@@ -750,7 +839,7 @@ export default function Admin() {
                       onChange={(e) => setProjectForm({ ...projectForm, shortDesc: e.target.value })}
                       required
                     />
-                    <span className="text-[11px] text-neutral-500 mt-1 block">Texto corto visible directamente en la cuadrícula de proyectos.</span>
+                    <span className="text-[11px] text-neutral-500 mt-1 block">Texto corto visible directamente en la card.</span>
                   </label>
 
                   <label className="block text-xs text-neutral-300">
@@ -761,19 +850,19 @@ export default function Admin() {
                       onChange={(e) => setProjectForm({ ...projectForm, tags: e.target.value })}
                       placeholder="React, Luau, Tailwind, API"
                     />
-                    <span className="text-[11px] text-neutral-500 mt-1 block">Separados por coma. Aparecen como insignias en la card.</span>
+                    <span className="text-[11px] text-neutral-500 mt-1 block">Separados por coma.</span>
                   </label>
 
                   <ToggleSwitch
                     checked={projectForm.isPublic}
                     onChange={(val) => setProjectForm({ ...projectForm, isPublic: val })}
                     label="Publicar Proyecto"
-                    description="Si está desactivado, se guardará como borrador y no aparecerá en el catálogo público."
+                    description="Si se desactiva, queda como borrador oculto."
                   />
                 </div>
               )}
 
-              {/* SECCIÓN 2: VENTANA FLOTANTE (MODAL DETALLADO) */}
+              {/* SECCIÓN 2: MODAL FLOTANTE */}
               {formSection === 'modal' && (
                 <div className="space-y-4">
                   <label className="block text-xs text-neutral-300">
@@ -783,9 +872,9 @@ export default function Admin() {
                       rows="3"
                       value={projectForm.vision}
                       onChange={(e) => setProjectForm({ ...projectForm, vision: e.target.value })}
-                      placeholder="Explica qué problema resuelve este sistema..."
+                      placeholder="Detalles sobre el propósito del sistema..."
                     />
-                    <span className="text-[11px] text-neutral-500 mt-1 block">Aparece en el bloque principal al abrir la ventana flotante.</span>
+                    <span className="text-[11px] text-neutral-500 mt-1 block">Texto principal en el modal.</span>
                   </label>
 
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -796,9 +885,9 @@ export default function Admin() {
                         rows="3"
                         value={projectForm.goals}
                         onChange={(e) => setProjectForm({ ...projectForm, goals: e.target.value })}
-                        placeholder="Metas de rendimiento, persistencia, etc."
+                        placeholder="Objetivos logrados..."
                       />
-                      <span className="text-[11px] text-neutral-500 mt-1 block">Bloque 'Objetivos' dentro del modal.</span>
+                      <span className="text-[11px] text-neutral-500 mt-1 block">Bloque 'Objetivos' del modal.</span>
                     </label>
 
                     <label className="text-xs text-neutral-300">
@@ -808,9 +897,9 @@ export default function Admin() {
                         rows="3"
                         value={projectForm.inspiration}
                         onChange={(e) => setProjectForm({ ...projectForm, inspiration: e.target.value })}
-                        placeholder="Origen de la idea o motivación..."
+                        placeholder="Origen de la idea..."
                       />
-                      <span className="text-[11px] text-neutral-500 mt-1 block">Bloque 'Inspiración' dentro del modal.</span>
+                      <span className="text-[11px] text-neutral-500 mt-1 block">Bloque 'Inspiración' del modal.</span>
                     </label>
                   </div>
 
@@ -822,7 +911,7 @@ export default function Admin() {
                         value={projectForm.team} 
                         onChange={(e) => setProjectForm({ ...projectForm, team: e.target.value })} 
                       />
-                      <span className="text-[11px] text-neutral-500 mt-1 block">Ej: En solitario (Panda158).</span>
+                      <span className="text-[11px] text-neutral-500 mt-1 block">Ej: En solitario (Panda158)</span>
                     </label>
 
                     <label className="text-xs text-neutral-300">
@@ -832,7 +921,7 @@ export default function Admin() {
                         value={projectForm.architecture} 
                         onChange={(e) => setProjectForm({ ...projectForm, architecture: e.target.value })} 
                       />
-                      <span className="text-[11px] text-neutral-500 mt-1 block">Ej: Frontend interactivo / Canvas y Luau.</span>
+                      <span className="text-[11px] text-neutral-500 mt-1 block">Ej: Frontend interactivo / Canvas y Luau</span>
                     </label>
                   </div>
 
@@ -844,14 +933,14 @@ export default function Admin() {
                           className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
                           value={projectForm.demoUrl} 
                           onChange={(e) => setProjectForm({ ...projectForm, demoUrl: e.target.value })} 
-                          placeholder="https://pandacraft.me"
+                          placeholder="https://..."
                         />
                       </label>
                       <ToggleSwitch
                         checked={projectForm.showDemoBtn}
                         onChange={(val) => setProjectForm({ ...projectForm, showDemoBtn: val })}
-                        label="Mostrar Botón 'Ver proyecto'"
-                        description="Habilita el botón morado de acceso directo a la demo."
+                        label="Mostrar Botón Demo"
+                        description="Habilita 'Ver proyecto ↗'"
                       />
                     </div>
 
@@ -862,14 +951,14 @@ export default function Admin() {
                           className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
                           value={projectForm.repoUrl} 
                           onChange={(e) => setProjectForm({ ...projectForm, repoUrl: e.target.value })} 
-                          placeholder="https://github.com/DereckVC/..."
+                          placeholder="https://github.com/..."
                         />
                       </label>
                       <ToggleSwitch
                         checked={projectForm.showGithubBtn}
                         onChange={(val) => setProjectForm({ ...projectForm, showGithubBtn: val })}
-                        label="Mostrar Botón 'GitHub'"
-                        description="Habilita el botón con icono para visitar el código abierto."
+                        label="Mostrar Botón GitHub"
+                        description="Habilita enlace al repositorio"
                       />
                     </div>
                   </div>
@@ -877,10 +966,9 @@ export default function Admin() {
               )}
             </form>
 
-            {/* Pie Fijo con Botón Guardar */}
             <div className="p-4 sm:p-5 border-t border-white/10 bg-[#0d0d14] flex items-center justify-between shrink-0">
               <span className="text-[11px] text-neutral-500 flex items-center gap-1.5">
-                <Info size={13} /> Guarda tus cambios para verlos reflejados en tiempo real.
+                <Info size={13} /> Los cambios se sincronizan en vivo.
               </span>
               <div className="flex gap-2">
                 <button 
@@ -922,7 +1010,7 @@ export default function Admin() {
                     <button
                       key={idx}
                       type="button"
-                      onClick={() => { setReplySubject(preset.subject); setReplyText(preset.text); }}
+                      onClick={() => { setReplySubject(preset.subject); setReplyText(preset.text) }}
                       className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-[#8b5cf6]/30 border border-white/10 text-xs text-purple-200 transition"
                     >
                       {preset.title}
@@ -946,7 +1034,7 @@ export default function Admin() {
           </div>
         </div>
       )}
-    </main>
+    </div>
   )
 }
 

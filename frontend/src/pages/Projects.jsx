@@ -200,25 +200,28 @@ function ProjectModal({ project, text, onClose }) {
   const hasGithub = Boolean(project.showGithubBtn) && Boolean(project.githubUrl)
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6" role="presentation" onClick={onClose}>
-      {/* Contenedor ancho horizontal para PC */}
+    <div 
+      className="fixed inset-0 z-[70] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 lg:p-10 overflow-y-auto"
+      role="presentation" 
+      onClick={onClose}
+    >
       <article 
-        className="w-full max-w-5xl xl:max-w-6xl bg-[#0d0d14] border border-[#8b5cf6]/40 rounded-3xl overflow-hidden shadow-2xl relative max-h-[92vh] flex flex-col"
+        className="relative w-full max-w-5xl xl:max-w-6xl my-auto max-h-[88vh] bg-[#0d0d14] border border-[#8b5cf6]/40 rounded-3xl overflow-hidden shadow-2xl flex flex-col"
         role="dialog" 
         aria-modal="true" 
         onClick={(event) => event.stopPropagation()}
       >
-        {/* Barra superior con botón volver y cerrar */}
+        {/* Cabecera Flotante con Botones de Cierre */}
         <div className="absolute top-4 left-4 right-4 z-30 flex items-center justify-between pointer-events-none">
           <button 
-            className="pointer-events-auto rounded-xl border border-white/10 bg-black/60 backdrop-blur-md px-3.5 py-2 text-xs font-semibold text-white transition hover:border-[#8b5cf6] hover:bg-[#8b5cf6]" 
+            className="pointer-events-auto rounded-xl border border-white/10 bg-black/70 backdrop-blur-md px-3.5 py-2 text-xs font-semibold text-white transition hover:border-[#8b5cf6] hover:bg-[#8b5cf6]" 
             type="button" 
             onClick={onClose}
           >
             ← Volver a Proyectos
           </button>
           <button 
-            className="pointer-events-auto grid h-9 w-9 place-items-center rounded-xl bg-black/60 backdrop-blur-md border border-white/10 text-neutral-300 hover:text-white hover:bg-white/10 transition" 
+            className="pointer-events-auto grid h-9 w-9 place-items-center rounded-xl bg-black/70 backdrop-blur-md border border-white/10 text-neutral-300 hover:text-white hover:bg-white/10 transition" 
             type="button" 
             onClick={onClose}
           >
@@ -226,7 +229,7 @@ function ProjectModal({ project, text, onClose }) {
           </button>
         </div>
 
-        {/* Banner de altura balanceada (no invasivo verticalmente) */}
+        {/* Banner Horizontal Compacto */}
         <div className="relative h-44 sm:h-56 md:h-64 lg:h-72 w-full overflow-hidden bg-black shrink-0">
           <img className="h-full w-full object-cover" src={project.images[currentImageIndex]} alt={`${project.title} ${currentImageIndex + 1}`} />
           <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d14] via-transparent to-black/40" />
@@ -243,7 +246,7 @@ function ProjectModal({ project, text, onClose }) {
           )}
         </div>
 
-        {/* Cuerpo del Modal: Distribución Horizontal en 2 Columnas para PC */}
+        {/* Contenido en 2 Columnas Horizontales */}
         <div className="overflow-y-auto p-6 sm:p-8 lg:p-10">
           <div className="flex flex-wrap items-center gap-3">
             <span className="inline-block px-3 py-1 rounded-full text-xs font-mono font-bold tracking-wider uppercase bg-[#8b5cf6]/15 text-[#c4b5fd] border border-[#8b5cf6]/30">
@@ -254,9 +257,8 @@ function ProjectModal({ project, text, onClose }) {
           <h2 className="mt-2.5 text-2xl sm:text-4xl font-black tracking-tight text-white">{project.title}</h2>
           <div className="mt-3"><ProjectTags tags={project.tags} /></div>
 
-          {/* Grid de 2 Columnas en pantallas de escritorio */}
           <div className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Columna Izquierda (7 columnas): Narrativa técnica */}
+            {/* Columna Izquierda: Visión, Objetivos, Inspiración */}
             <div className="lg:col-span-7 space-y-6">
               <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
                 <h3 className="text-xs font-bold uppercase tracking-[0.14em] text-[#c4b5fd] flex items-center gap-2">
@@ -278,7 +280,7 @@ function ProjectModal({ project, text, onClose }) {
               </div>
             </div>
 
-            {/* Columna Derecha (5 columnas): Ficha Técnica y Enlaces */}
+            {/* Columna Derecha: Equipo, Arquitectura y Enlaces */}
             <div className="lg:col-span-5 space-y-5">
               <div className="rounded-2xl border border-white/10 bg-[#111118]/80 p-5 space-y-4">
                 <div>
@@ -296,7 +298,6 @@ function ProjectModal({ project, text, onClose }) {
                 </div>
               </div>
 
-              {/* Botones de Acción */}
               {(hasDemo || hasGithub) && (
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
                   {hasDemo && (
