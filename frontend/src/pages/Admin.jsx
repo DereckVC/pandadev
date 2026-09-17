@@ -46,7 +46,6 @@ const replyPresets = [
 
 const categories = ['Todos', 'Web', 'Sistemas', 'Roblox / Luau', 'Minecraft Tools', 'Bots', 'Otros']
 
-// Componente Toggle Switch interactivo
 function ToggleSwitch({ checked, onChange, label, description, size = 'md' }) {
   const isSm = size === 'sm'
   return (
@@ -60,8 +59,8 @@ function ToggleSwitch({ checked, onChange, label, description, size = 'md' }) {
           {description && <span className="block text-[11px] text-neutral-400">{description}</span>}
         </div>
       )}
-      <div className={`relative inline-flex shrink-0 items-center rounded-full transition-colors duration-200 ${isSm ? 'h-5 w-9' : 'h-6 w-11'} ${checked ? 'bg-[#8b5cf6]' : 'bg-neutral-800'}`}>
-        <span className={`inline-block rounded-full bg-white transition-transform duration-200 ${isSm ? 'h-3.5 w-3.5' : 'h-4 w-4'} ${checked ? (isSm ? 'translate-x-4.5' : 'translate-x-6') : 'translate-x-1'}`} />
+      <div className={`relative inline-flex shrink-0 items-center rounded-full transition-colors duration-150 ${checked ? 'bg-[#8b5cf6]' : 'bg-neutral-800'} ${isSm ? 'h-5 w-9' : 'h-6 w-11'}`}>
+        <span className={`inline-block rounded-full bg-white transition-transform duration-150 ${isSm ? 'h-3.5 w-3.5' : 'h-4 w-4'} ${checked ? (isSm ? 'translate-x-4.5' : 'translate-x-6') : 'translate-x-1'}`} />
       </div>
     </div>
   )
@@ -177,7 +176,7 @@ export default function Admin() {
 
       setModalOpen(false)
       setEditingProject(null)
-      setNotice('Proyecto guardado en la base de datos.')
+      setNotice('Proyecto guardado correctamente.')
       await loadProjects()
     } catch (err) {
       setModalError(err.message || 'No se pudo guardar el proyecto.')
@@ -195,45 +194,46 @@ export default function Admin() {
     }
   }
 
+  // Switches con actualización instantánea (Optimistic UI: 0ms de retardo)
   const toggleVisibility = async (project) => {
     const nextVal = !project.isPublic
+    setProjects((prev) => prev.map((p) => (p._id === project._id ? { ...p, isPublic: nextVal } : p)))
     try {
       await request(`/admin/projects/${project._id}`, {
         method: 'PUT',
         body: JSON.stringify({ isPublic: nextVal })
       })
-      await loadProjects()
-      setNotice(`Proyecto ${nextVal ? 'publicado' : 'ocultado'}.`)
     } catch (err) {
-      setError(err.message)
+      setProjects((prev) => prev.map((p) => (p._id === project._id ? { ...p, isPublic: !nextVal } : p)))
+      setError(`Error al cambiar visibilidad: ${err.message}`)
     }
   }
 
   const toggleGithub = async (project) => {
     const nextVal = !(project.showGithubBtn ?? project.githubVisible)
+    setProjects((prev) => prev.map((p) => (p._id === project._id ? { ...p, showGithubBtn: nextVal, githubVisible: nextVal } : p)))
     try {
       await request(`/admin/projects/${project._id}`, {
         method: 'PUT',
         body: JSON.stringify({ showGithubBtn: nextVal, githubVisible: nextVal })
       })
-      await loadProjects()
-      setNotice(`GitHub ${nextVal ? 'activado' : 'desactivado'}.`)
     } catch (err) {
-      setError(err.message)
+      setProjects((prev) => prev.map((p) => (p._id === project._id ? { ...p, showGithubBtn: !nextVal, githubVisible: !nextVal } : p)))
+      setError(`Error en botón GitHub: ${err.message}`)
     }
   }
 
   const toggleDemo = async (project) => {
     const nextVal = !(project.showDemoBtn ?? project.demoVisible)
+    setProjects((prev) => prev.map((p) => (p._id === project._id ? { ...p, showDemoBtn: nextVal, demoVisible: nextVal } : p)))
     try {
       await request(`/admin/projects/${project._id}`, {
         method: 'PUT',
         body: JSON.stringify({ showDemoBtn: nextVal, demoVisible: nextVal })
       })
-      await loadProjects()
-      setNotice(`Demo ${nextVal ? 'activado' : 'desactivado'}.`)
     } catch (err) {
-      setError(err.message)
+      setProjects((prev) => prev.map((p) => (p._id === project._id ? { ...p, showDemoBtn: !nextVal, demoVisible: !nextVal } : p)))
+      setError(`Error en botón Demo: ${err.message}`)
     }
   }
 
@@ -310,10 +310,10 @@ export default function Admin() {
         body: JSON.stringify({ subject: replySubject, replyText })
       })
       setReplyingMessage(null)
-      setNotice('Respuesta enviada correctamente por correo.')
+      setNotice('Respuesta despachada con éxito por correo.')
       await loadMessages()
     } catch (err) {
-      setError(err.message)
+      setError(`No se pudo enviar el correo: ${err.message}`)
     } finally {
       setSendingReply(false)
     }
@@ -344,10 +344,8 @@ export default function Admin() {
     }
   ]
 
-  // Contenido de la barra lateral Quantum
   const sidebarContent = (
     <div className="flex flex-col h-full bg-[#0d0d14] border-r border-white/10 p-5 select-none">
-      {/* Tarjeta de Usuario estilo Quantum */}
       <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-white/[0.03] border border-white/5 mb-6">
         <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#8b5cf6] text-white font-black text-sm shadow-md">
           {(user.name || user.email || 'A')[0].toUpperCase()}
@@ -361,7 +359,6 @@ export default function Admin() {
         </div>
       </div>
 
-      {/* Menú Categorizado */}
       <div className="flex-1 space-y-6 overflow-y-auto pr-1">
         {menuSections.map((sec) => (
           <div key={sec.label} className="space-y-1.5">
@@ -398,7 +395,6 @@ export default function Admin() {
         ))}
       </div>
 
-      {/* Botones Inferiores estilo Quantum */}
       <div className="pt-4 mt-auto border-t border-white/10 space-y-2">
         <Link
           to="/"
@@ -419,12 +415,10 @@ export default function Admin() {
 
   return (
     <div className="min-h-screen bg-[#07070a] flex flex-col md:flex-row">
-      {/* Sidebar Fijo en Desktop estilo Quantum */}
       <aside className="hidden md:block w-72 shrink-0 sticky top-0 h-screen">
         {sidebarContent}
       </aside>
 
-      {/* Barra Superior Móvil con Botón Hamburger del Sidebar */}
       <div className="md:hidden flex items-center justify-between p-4 border-b border-white/10 bg-[#0d0d14]">
         <button
           onClick={() => setMobileSidebarOpen(true)}
@@ -435,7 +429,6 @@ export default function Admin() {
         <span className="text-xs font-mono text-[#c4b5fd]">Command Center</span>
       </div>
 
-      {/* Drawer Móvil del Sidebar */}
       {mobileSidebarOpen && (
         <div className="fixed inset-0 z-50 md:hidden flex">
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setMobileSidebarOpen(false)} />
@@ -445,7 +438,6 @@ export default function Admin() {
         </div>
       )}
 
-      {/* Contenido Principal a la Derecha */}
       <main className="flex-1 p-4 sm:p-6 lg:p-10 max-w-6xl overflow-y-auto">
         <header className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -474,7 +466,6 @@ export default function Admin() {
           </div>
         )}
 
-        {/* 1. Dashboard / Vista General */}
         {activeTab === 'overview' && (
           <section className="space-y-6">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -518,7 +509,6 @@ export default function Admin() {
           </section>
         )}
 
-        {/* 2. Catálogo de Proyectos con Switches Reales */}
         {activeTab === 'projects' && (
           <section className="space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-4 bg-[#0d0d14]/90 p-4 rounded-2xl border border-white/10">
@@ -558,22 +548,17 @@ export default function Admin() {
                       <p className="text-xs text-neutral-400 truncate">{project.category} · Slug: <code className="text-purple-300">/{project.slug}</code></p>
                     </div>
 
-                    {/* Fila de Switches Interactivos Reales */}
                     <div className="flex flex-wrap items-center gap-4 bg-black/40 p-2.5 rounded-2xl border border-white/5">
                       <div className="flex items-center gap-2">
                         <span className="text-[11px] text-neutral-400">Visible</span>
                         <ToggleSwitch size="sm" checked={project.isPublic} onChange={() => toggleVisibility(project)} />
                       </div>
-
                       <div className="h-4 w-[1px] bg-white/10 hidden sm:block" />
-
                       <div className="flex items-center gap-2">
                         <span className="text-[11px] text-neutral-400">Demo</span>
                         <ToggleSwitch size="sm" checked={project.showDemoBtn} onChange={() => toggleDemo(project)} />
                       </div>
-
                       <div className="h-4 w-[1px] bg-white/10 hidden sm:block" />
-
                       <div className="flex items-center gap-2">
                         <span className="text-[11px] text-neutral-400">GitHub</span>
                         <ToggleSwitch size="sm" checked={project.showGithubBtn} onChange={() => toggleGithub(project)} />
@@ -627,7 +612,6 @@ export default function Admin() {
           </section>
         )}
 
-        {/* 3. Mensajes */}
         {activeTab === 'messages' && (
           <section className="space-y-4">
             {messages.length === 0 ? (
@@ -663,7 +647,6 @@ export default function Admin() {
           </section>
         )}
 
-        {/* 4. Usuarios */}
         {activeTab === 'users' && (
           <section className="overflow-x-auto rounded-2xl border border-white/10 bg-[#0d0d14]/90">
             <table className="w-full min-w-[650px] text-left text-sm">
@@ -701,7 +684,6 @@ export default function Admin() {
           </section>
         )}
 
-        {/* 5. Estado del Servidor */}
         {activeTab === 'settings' && (
           <section className="space-y-6">
             <div className="rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-6 space-y-4">
@@ -729,7 +711,6 @@ export default function Admin() {
         )}
       </main>
 
-      {/* Editor Completo de Proyectos con Pestañas y Switches */}
       {modalOpen && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
@@ -778,7 +759,6 @@ export default function Admin() {
                 </div>
               )}
 
-              {/* SECCIÓN 1: CARD DEL CATÁLOGO */}
               {formSection === 'card' && (
                 <div className="space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -799,7 +779,7 @@ export default function Admin() {
                         className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
                         value={projectForm.slug} 
                         onChange={(e) => setProjectForm({ ...projectForm, slug: e.target.value })} 
-                        placeholder="autogenerado si se deja vacío"
+                        placeholder="ej: mi-nuevo-proyecto"
                       />
                       <span className="text-[11px] text-neutral-500 mt-1 block">Ruta directa: /proyectos/slug</span>
                     </label>
@@ -862,7 +842,6 @@ export default function Admin() {
                 </div>
               )}
 
-              {/* SECCIÓN 2: MODAL FLOTANTE */}
               {formSection === 'modal' && (
                 <div className="space-y-4">
                   <label className="block text-xs text-neutral-300">
@@ -991,7 +970,6 @@ export default function Admin() {
         </div>
       )}
 
-      {/* Modal de Respuestas Preset */}
       {replyingMessage && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"

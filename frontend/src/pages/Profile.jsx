@@ -1,170 +1,389 @@
 import { useState } from 'react'
-import { Check, LockKeyhole, Save, ShieldCheck, UserRound } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { 
+  Activity, ArrowLeft, Check, Key, Lock, LogOut, 
+  Mail, Menu, Save, Shield, User, X, MessageSquare, AlertTriangle 
+} from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function Profile() {
-  const { user, api, updateUser } = useAuth()
-  const [name, setName] = useState(user?.name || '')
-  const [discordTag, setDiscordTag] = useState(user?.discordTag || '')
-  const [avatar, setAvatar] = useState(user?.avatar || '')
+  const { user, updateProfile, changePassword, logout } = useAuth()
+  const navigate = useNavigate()
+
+  const [activeTab, setActiveTab] = useState('dashboard') // 'dashboard', 'edit', 'security'
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  
+  // Formulario Editar Perfil
+  const [username, setUsername] = useState(user?.name || '')
+  const [discordTag, setDiscordTag] = useState(user?.discord || '')
+  
+  // Formulario Cambiar Contraseña
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
-  const [message, setMessage] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  
+  const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [twoFactorSetup, setTwoFactorSetup] = useState(null)
-  const [twoFactorToken, setTwoFactorToken] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  if (!user) return <main className="mx-auto max-w-5xl px-6 py-24 text-center"><h1 className="text-3xl font-black text-white">Inicia sesión para ver tu perfil</h1><Link className="button button-primary mt-6 inline-flex" to="/login">Ir a iniciar sesión</Link></main>
+  if (!user) {
+    navigate('/login', { replace: true })
+    return null
+  }
 
-  const saveProfile = async (event) => {
-    event.preventDefault()
-    setSaving(true)
-    setMessage('')
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault()
+    setNotice('')
     setError('')
+    setLoading(true)
     try {
-      const response = await fetch(`${api}/auth/profile`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, discordTag }) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.message)
-      updateUser(data.user)
-      setMessage('Cambios guardados correctamente.')
-    } catch (requestError) {
-      setError(requestError.message || 'No se pudieron guardar los cambios.')
+      if (updateProfile) {
+        await updateProfile({ name: username, discord: discordTag })
+      }
+      setNotice('Perfil actualizado correctamente.')
+    } catch (err) {
+      setError(err.message || 'Error al actualizar el perfil')
     } finally {
-      setSaving(false)
+      setLoading(false)
     }
   }
 
-  const updatePassword = async (event) => {
-    event.preventDefault()
-    setSaving(true)
-    setMessage('')
+  const handleChangePassword = async (e) => {
+    e.preventDefault()
+    setNotice('')
     setError('')
+    if (newPassword !== confirmPassword) {
+      setError('Las nuevas contraseñas no coinciden.')
+      return
+    }
+    if (newPassword.length < 6) {
+      setError('La nueva contraseña debe tener al menos 6 caracteres.')
+      return
+    }
+    setLoading(true)
     try {
-      if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(newPassword)) throw new Error('La contraseña debe tener 8 caracteres, mayúscula, minúscula y número.')
-      const response = await fetch(`${api}/auth/change-password`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ currentPassword, newPassword }) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.message)
-      updateUser(data.user)
+      if (changePassword) {
+        await changePassword(currentPassword, newPassword)
+      }
+      setNotice('Contraseña cambiada exitosamente.')
       setCurrentPassword('')
       setNewPassword('')
-      setMessage('Contraseña actualizada correctamente.')
-    } catch (requestError) {
-      setError(requestError.message || 'No se pudo actualizar la contraseña.')
+      setConfirmPassword('')
+    } catch (err) {
+      setError(err.message || 'No se pudo cambiar la contraseña')
     } finally {
-      setSaving(false)
-    }
-
-  }
-
-  const saveAvatar = async (value) => {
-    setAvatar(value)
-    setError('')
-    try {
-      const response = await fetch(`${api}/auth/profile/avatar`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ avatar: value }) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.message)
-      updateUser(data.user)
-      setMessage(value ? 'Avatar actualizado.' : 'Avatar eliminado; se mostrará tu inicial.')
-    } catch (requestError) { setError(requestError.message || 'No se pudo actualizar el avatar.') }
-  }
-
-  const handleAvatarFile = (event) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-    if (!file.type.startsWith('image/')) { setError('Selecciona una imagen válida.'); return }
-    const reader = new FileReader()
-    reader.onload = () => saveAvatar(String(reader.result))
-    reader.readAsDataURL(file)
-  }
-
-  const generateTwoFactor = async () => {
-    setError('')
-    try {
-      const response = await fetch(`${api}/auth/2fa/generate`, { method: 'POST', credentials: 'include' })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.message)
-      setTwoFactorSetup(data)
-    } catch (requestError) {
-      setError(requestError.message || 'No se pudo generar el código QR.')
+      setLoading(false)
     }
   }
 
-  const enableTwoFactor = async (event) => {
-    event.preventDefault()
-    setSaving(true)
-    try {
-      const response = await fetch(`${api}/auth/2fa/enable`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: twoFactorToken, base32: twoFactorSetup.base32 }) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.message)
-      updateUser(data.user)
-      setTwoFactorSetup(null)
-      setTwoFactorToken('')
-      setMessage('2FA activado correctamente.')
-    } catch (requestError) {
-      setError(requestError.message || 'No se pudo activar 2FA.')
-    } finally {
-      setSaving(false)
+  const menuItems = [
+    {
+      label: 'General',
+      items: [
+        { id: 'dashboard', label: 'Dashboard', icon: <Activity size={16} /> },
+      ]
+    },
+    {
+      label: 'Cuenta',
+      items: [
+        { id: 'edit', label: 'Editar Perfil', icon: <User size={16} /> },
+        { id: 'security', label: 'Seguridad', icon: <Shield size={16} /> },
+      ]
     }
-  }
+  ]
 
-  const disableTwoFactor = async () => {
-    const token = window.prompt('Introduce el código actual de Google Authenticator para desactivar 2FA.')
-    if (!token) return
-    setSaving(true)
-    try {
-      const response = await fetch(`${api}/auth/2fa/disable`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.message)
-      updateUser(data.user)
-      setMessage('2FA desactivado.')
-    } catch (requestError) {
-      setError(requestError.message || 'No se pudo desactivar 2FA.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return <main className="max-w-5xl mx-auto px-6 py-12">
-    <section className="overflow-hidden rounded-3xl border border-white/10 bg-[#0d0d14]/90 shadow-2xl">
-      <div className="h-32 bg-gradient-to-r from-[#8b5cf6]/30 via-[#161221] to-[#06b6d4]/10" />
-      <div className="-mt-14 flex flex-col gap-5 px-6 pb-7 sm:flex-row sm:items-end sm:px-8">
-        {user.avatar ? <img className="h-28 w-28 rounded-3xl border-4 border-[#0d0d14] object-cover shadow-xl" src={user.avatar} alt="" /> : <div className="grid h-28 w-28 place-items-center rounded-3xl border-4 border-[#0d0d14] bg-[#8b5cf6] text-4xl font-black text-white shadow-xl">{(user.name || user.email).slice(0, 1).toUpperCase()}</div>}
+  const sidebar = (
+    <div className="flex flex-col h-full bg-[#0d0d14] border-r border-white/10 p-5 select-none">
+      {/* Tarjeta de usuario estilo Quantum */}
+      <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-white/[0.03] border border-white/5 mb-6">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#8b5cf6] text-white font-black text-sm shadow-md">
+          {(user.name || user.email || 'U')[0].toUpperCase()}
+        </div>
         <div className="min-w-0 flex-1">
-          <span className="text-xs font-mono uppercase tracking-[0.2em] text-[#c4b5fd]">PANDADEV / CUENTA</span>
-          <h1 className="mt-1 truncate text-3xl font-black text-white">{user.name || 'PandaDev User'}</h1>
-          <p className="mt-1 flex items-center gap-2 truncate text-sm text-neutral-400"><LockKeyhole size={14} />{user.email}</p>
+          <p className="text-xs font-bold text-white truncate">{user.name || 'Usuario'}</p>
+          <p className="text-[11px] text-neutral-400 truncate">{user.email}</p>
+          <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-[#8b5cf6]/20 text-[#c4b5fd] border border-[#8b5cf6]/30">
+            {user.role === 'admin' ? 'ADMINISTRADOR' : 'MIEMBRO OFICIAL'}
+          </span>
         </div>
-        <span className="inline-flex items-center gap-2 self-start rounded-full border border-[#8b5cf6]/40 bg-[#8b5cf6]/15 px-3 py-1.5 text-xs font-bold tracking-wider text-[#d8b4fe] sm:self-end">{user.role === 'admin' ? 'ADMIN' : 'USER'}</span>
       </div>
-    </section>
-    <div className="mt-8 grid gap-6 lg:grid-cols-2">
-      <form className="rounded-3xl border border-white/10 bg-[#0d0d14]/90 p-6 shadow-xl" onSubmit={saveProfile}>
-        <div className="flex items-center gap-3"><UserRound className="text-[#a855f7]" size={20} /><div><h2 className="text-xl font-bold text-white">Datos de Perfil</h2><p className="text-sm text-neutral-400">Actualiza la información visible de tu cuenta.</p></div></div>
-        <label className="mt-6 block text-sm text-neutral-300">Nombre visible<input className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-[#8b5cf6] focus:ring-2 focus:ring-[#8b5cf6]" value={name} onChange={(event) => setName(event.target.value)} maxLength="32" required /></label>
-        <label className="mt-4 block text-sm text-neutral-300">Discord Tag<input className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-[#8b5cf6] focus:ring-2 focus:ring-[#8b5cf6]" placeholder="dereck#0001 o @dereck" value={discordTag} onChange={(event) => setDiscordTag(event.target.value)} maxLength="64" /></label>
-        <label className="mt-4 block text-sm text-neutral-300">URL de avatar<input className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-[#8b5cf6]" value={avatar.startsWith('data:') ? '' : avatar} onChange={(event) => setAvatar(event.target.value)} onBlur={() => saveAvatar(avatar)} placeholder="https://..." /></label>
-        <div className="mt-4 flex flex-wrap gap-3"><label className="button button-outline cursor-pointer">Subir imagen<input className="hidden" type="file" accept="image/*" onChange={handleAvatarFile} /></label><button className="button button-outline" type="button" onClick={() => saveAvatar('')}>Quitar foto / Usar inicial</button></div>
-        <button className="button button-primary mt-6" type="submit" disabled={saving}><Save size={16} />Guardar Cambios</button>
-      </form>
-      <form className="rounded-3xl border border-white/10 bg-[#0d0d14]/90 p-6 shadow-xl" onSubmit={updatePassword}>
-        <div className="flex items-center gap-3"><LockKeyhole className="text-[#a855f7]" size={20} /><div><h2 className="text-xl font-bold text-white">Seguridad y Contraseña</h2><p className="text-sm text-neutral-400">Mantén tu acceso protegido.</p></div></div>
-        {user.provider !== 'local' ? <div className="mt-6 rounded-2xl border border-[#8b5cf6]/30 bg-[#8b5cf6]/10 p-4 text-sm leading-relaxed text-[#ddd6fe]">Tu cuenta está protegida por tu proveedor federado.</div> : <><label className="mt-6 block text-sm text-neutral-300">Contraseña actual<input className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-[#8b5cf6] focus:ring-2 focus:ring-[#8b5cf6]" type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required /></label><label className="mt-4 block text-sm text-neutral-300">Nueva contraseña<input className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-[#8b5cf6] focus:ring-2 focus:ring-[#8b5cf6]" type="password" minLength="8" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required /></label><button className="button button-outline mt-6" type="submit" disabled={saving}>Actualizar Contraseña</button></>}
-      </form>
-      <section className="rounded-3xl border border-white/10 bg-[#0d0d14]/90 p-6 shadow-xl lg:col-span-2">
-        <div className="flex items-start justify-between gap-4"><div className="flex items-start gap-3"><ShieldCheck className="mt-1 text-[#06b6d4]" size={22} /><div><h2 className="text-xl font-bold text-white">Autenticación de Dos Factores (2FA)</h2><p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-400">Añade una capa extra de protección a tu cuenta mediante códigos temporales de autenticador.</p></div></div>{user.twoFactorEnabled && <span className="shrink-0 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-[10px] font-bold tracking-wider text-emerald-300">● 2FA ACTIVADO CON GOOGLE AUTHENTICATOR</span>}</div>
-        {!user.twoFactorEnabled ? <div className="mt-6"><button className="button button-primary" type="button" onClick={generateTwoFactor}>Configurar Google Authenticator</button>{twoFactorSetup && <form className="mt-6 grid gap-5 rounded-2xl border border-[#8b5cf6]/30 bg-[#8b5cf6]/10 p-5 sm:grid-cols-[auto_1fr]" onSubmit={enableTwoFactor}><img className="h-48 w-48 rounded-xl bg-white p-2" src={twoFactorSetup.qrCodeUrl} alt="Código QR para Google Authenticator" /><div><p className="text-sm text-neutral-300">Escanea este QR en Google Authenticator o introduce la clave manual:</p><code className="mt-3 block break-all rounded-lg bg-black/30 p-3 font-mono text-sm text-[#d8b4fe]">{twoFactorSetup.base32}</code><label className="mt-4 block text-sm text-neutral-300">Código de 6 dígitos<input className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-center font-mono tracking-[0.4em] text-white outline-none focus:border-[#8b5cf6]" inputMode="numeric" pattern="[0-9]{6}" maxLength="6" value={twoFactorToken} onChange={(event) => setTwoFactorToken(event.target.value)} required /></label><button className="button button-primary mt-4" type="submit" disabled={saving}>Activar 2FA</button></div></form>}</div> : <div className="mt-6"><button className="button button-outline" type="button" onClick={disableTwoFactor} disabled={saving}>Desactivar 2FA</button></div>}
-      </section>
-      <section className="rounded-3xl border border-white/10 bg-[#0d0d14]/90 p-6 shadow-xl lg:col-span-2">
-        <h2 className="text-xl font-bold text-white">Preferencias de cuenta</h2>
-        <div className="mt-4 grid gap-3 text-sm text-neutral-300 sm:grid-cols-3">
-          <p>Proveedor: <strong className="text-white">{user.provider || 'local'}</strong></p>
-          <p>Registro: <strong className="text-white">{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'No disponible'}</strong></p>
-          <p>Estado: <strong className="text-emerald-300">{user.isVerified ? 'VERIFICADO' : 'PENDIENTE'}</strong></p>
-        </div>
-      </section>
+
+      <div className="flex-1 space-y-6 overflow-y-auto pr-1">
+        {menuItems.map((sec) => (
+          <div key={sec.label} className="space-y-1.5">
+            <span className="px-3 text-[10px] font-mono font-bold uppercase tracking-wider text-neutral-500">
+              {sec.label}
+            </span>
+            {sec.items.map((item) => {
+              const isActive = activeTab === item.id
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => { setActiveTab(item.id); setMobileSidebarOpen(false) }}
+                  className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                    isActive
+                      ? 'bg-[#8b5cf6]/15 text-white border-l-2 border-[#8b5cf6] pl-3 shadow-sm'
+                      : 'text-neutral-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <span className={isActive ? 'text-[#a855f7]' : 'text-neutral-500'}>{item.icon}</span>
+                  {item.label}
+                </button>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+
+      <div className="pt-4 mt-auto border-t border-white/10 space-y-2">
+        <Link
+          to="/"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold text-neutral-300 bg-white/5 hover:bg-white/10 hover:text-white transition border border-white/5"
+        >
+          <ArrowLeft size={14} /> Volver al Inicio
+        </Link>
+        <button
+          type="button"
+          onClick={() => { if (logout) logout(); navigate('/') }}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-red-400 hover:text-red-300 transition"
+        >
+          <LogOut size={13} /> Cerrar Sesión
+        </button>
+      </div>
     </div>
-    {(message || error) && <div className={`mt-6 flex items-center gap-2 rounded-2xl border p-4 text-sm ${error ? 'border-red-400/30 bg-red-400/10 text-red-200' : 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200'}`}>{!error && <Check size={16} />}{error || message}</div>}
-  </main>
+  )
+
+  return (
+    <div className="min-h-screen bg-[#07070a] flex flex-col md:flex-row">
+      {/* Sidebar Desktop estilo Quantum */}
+      <aside className="hidden md:block w-72 shrink-0 sticky top-0 h-screen">
+        {sidebar}
+      </aside>
+
+      {/* Header Móvil */}
+      <div className="md:hidden flex items-center justify-between p-4 border-b border-white/10 bg-[#0d0d14]">
+        <button
+          onClick={() => setMobileSidebarOpen(true)}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-semibold text-white"
+        >
+          <Menu size={16} /> Menú Cuenta
+        </button>
+        <span className="text-xs font-mono text-[#c4b5fd]">Mi Perfil</span>
+      </div>
+
+      {mobileSidebarOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex">
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setMobileSidebarOpen(false)} />
+          <div className="relative w-72 max-w-[85vw] h-full z-10 animate-in slide-in-from-left duration-200">
+            {sidebar}
+          </div>
+        </div>
+      )}
+
+      {/* Área Principal de Contenido */}
+      <main className="flex-1 p-4 sm:p-6 lg:p-10 max-w-4xl overflow-y-auto">
+        <header className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <span className="inline-flex rounded-full border border-[#8b5cf6]/40 bg-[#8b5cf6]/10 px-3 py-1 text-[11px] font-mono tracking-wider text-[#d8b4fe]">
+              ● PANEL PERSONAL · PANDADEV
+            </span>
+            <h1 className="mt-2 text-2xl sm:text-4xl font-black tracking-tight text-white">
+              ¡Bienvenido, <span className="text-[#a855f7]">{user.name || 'Panda'}</span>!
+            </h1>
+          </div>
+          {user.role === 'admin' && (
+            <Link
+              to="/admin"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#8b5cf6]/50 bg-[#8b5cf6]/15 text-xs font-semibold text-[#d8b4fe] hover:bg-[#8b5cf6]/25 transition self-start sm:self-center"
+            >
+              <Shield size={14} /> Ir al Command Center
+            </Link>
+          )}
+        </header>
+
+        {notice && (
+          <div className="mb-5 flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-200">
+            <Check size={18} /> {notice}
+            <button className="ml-auto" onClick={() => setNotice('')}><X size={16} /></button>
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-5 rounded-xl border border-red-400/30 bg-red-400/10 p-4 text-sm text-red-200">
+            {error}
+          </div>
+        )}
+
+        {/* TAB 1: DASHBOARD USUARIO */}
+        {activeTab === 'dashboard' && (
+          <section className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-5">
+                <span className="text-[11px] font-mono text-neutral-400 uppercase">Rol de Usuario</span>
+                <strong className="block text-xl font-bold text-white mt-1 capitalize">{user.role || 'Miembro'}</strong>
+                <span className="text-[10px] text-emerald-400 mt-2 block font-mono">● CUENTA ACTIVA</span>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-5">
+                <span className="text-[11px] font-mono text-neutral-400 uppercase">Proveedor de Acceso</span>
+                <strong className="block text-xl font-bold text-white mt-1 capitalize">{user.provider || 'Local / Email'}</strong>
+                <span className="text-[10px] text-purple-300 mt-2 block font-mono">● SESIÓN SEGURA</span>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-5">
+                <span className="text-[11px] font-mono text-neutral-400 uppercase">Miembro Desde</span>
+                <strong className="block text-xl font-bold text-white mt-1">
+                  {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '2026'}
+                </strong>
+                <span className="text-[10px] text-neutral-400 mt-2 block font-mono">VERIFICADO</span>
+              </div>
+            </div>
+
+            {/* Acciones Rápidas */}
+            <div className="rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-6">
+              <h2 className="text-base font-bold text-white mb-4">Acciones Rápidas</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  onClick={() => setActiveTab('edit')}
+                  className="flex items-center justify-between p-4 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.06] hover:border-[#8b5cf6]/40 transition text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <User size={18} className="text-[#a855f7]" />
+                    <div>
+                      <p className="text-xs font-bold text-white">Editar Perfil</p>
+                      <p className="text-[11px] text-neutral-400">Actualiza tu nombre y datos</p>
+                    </div>
+                  </div>
+                  <span className="text-neutral-500">→</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('security')}
+                  className="flex items-center justify-between p-4 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.06] hover:border-[#8b5cf6]/40 transition text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <Key size={18} className="text-[#a855f7]" />
+                    <div>
+                      <p className="text-xs font-bold text-white">Seguridad</p>
+                      <p className="text-[11px] text-neutral-400">Cambiar clave de acceso</p>
+                    </div>
+                  </div>
+                  <span className="text-neutral-500">→</span>
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* TAB 2: EDITAR PERFIL */}
+        {activeTab === 'edit' && (
+          <section className="space-y-6">
+            <div className="rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-6">
+              <h2 className="text-lg font-bold text-white mb-1">Información Personal</h2>
+              <p className="text-xs text-neutral-400 mb-6">Administra tus datos visibles en la plataforma.</p>
+
+              <form onSubmit={handleUpdateProfile} className="space-y-4 max-w-lg">
+                <label className="block text-xs text-neutral-300">
+                  Nombre de Usuario
+                  <input
+                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-white text-xs outline-none focus:border-[#8b5cf6]"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    required
+                  />
+                </label>
+
+                <label className="block text-xs text-neutral-300">
+                  Correo Electrónico (Protegido)
+                  <div className="relative mt-1.5">
+                    <Lock size={13} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-500" />
+                    <input
+                      disabled
+                      className="w-full rounded-xl border border-white/5 bg-black/40 px-3.5 py-2.5 text-neutral-400 text-xs cursor-not-allowed"
+                      value={user.email || ''}
+                    />
+                  </div>
+                  <span className="text-[10px] text-neutral-500 mt-1 block">El email no puede ser modificado por seguridad.</span>
+                </label>
+
+                <label className="block text-xs text-neutral-300">
+                  Usuario de Discord (Opcional)
+                  <input
+                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-white text-xs outline-none focus:border-[#8b5cf6]"
+                    placeholder="Usuario#0000 o @usuario"
+                    value={discordTag}
+                    onChange={(e) => setDiscordTag(e.target.value)}
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="button button-primary px-5 py-2.5 text-xs font-semibold"
+                >
+                  <Save size={14} /> {loading ? 'Guardando...' : 'Guardar Cambios'}
+                </button>
+              </form>
+            </div>
+          </section>
+        )}
+
+        {/* TAB 3: SEGURIDAD */}
+        {activeTab === 'security' && (
+          <section className="space-y-6">
+            <div className="rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-6">
+              <h2 className="text-lg font-bold text-white mb-1">Seguridad de la Cuenta</h2>
+              <p className="text-xs text-neutral-400 mb-6">Gestiona tus credenciales de inicio de sesión.</p>
+
+              <form onSubmit={handleChangePassword} className="space-y-4 max-w-lg">
+                <label className="block text-xs text-neutral-300">
+                  Contraseña Actual
+                  <input
+                    type="password"
+                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-white text-xs outline-none focus:border-[#8b5cf6]"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                  />
+                </label>
+
+                <label className="block text-xs text-neutral-300">
+                  Nueva Contraseña
+                  <input
+                    type="password"
+                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-white text-xs outline-none focus:border-[#8b5cf6]"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Mínimo 6 caracteres"
+                    required
+                  />
+                </label>
+
+                <label className="block text-xs text-neutral-300">
+                  Confirmar Nueva Contraseña
+                  <input
+                    type="password"
+                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-white text-xs outline-none focus:border-[#8b5cf6]"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Repite la nueva contraseña"
+                    required
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="button button-primary px-5 py-2.5 text-xs font-semibold"
+                >
+                  <Key size={14} /> {loading ? 'Actualizando...' : 'Cambiar Contraseña'}
+                </button>
+              </form>
+            </div>
+          </section>
+        )}
+      </main>
+    </div>
+  )
 }
