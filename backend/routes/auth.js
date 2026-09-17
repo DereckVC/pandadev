@@ -7,17 +7,19 @@ const speakeasy = require('speakeasy');
 const qrcode = require('qrcode');
 const User = require('../models/User');
 const { requireAuth } = require('../middleware/auth');
-const { sendPasswordResetEmail, sendOTPEmail } = require('../utils/mailer');
+const { 
+  sendPasswordResetEmail, 
+  sendPasswordChangedEmail, 
+  sendOTPEmail 
+} = require('../utils/mailer');
 
 const router = express.Router();
 
-// Obtiene la URL de frontend limpia sin diagonales al final
 const getFrontendUrl = () => {
   const url = process.env.FRONTEND_URL || 'https://www.pandadev.me';
   return url.replace(/\/+$/, '');
 };
 
-// Determina si estamos en producción para exigir HTTPS y SameSite None
 const isProduction = process.env.NODE_ENV === 'production' || (process.env.FRONTEND_URL && !process.env.FRONTEND_URL.includes('localhost'));
 
 const cookieOptions = {
@@ -46,7 +48,6 @@ const publicUser = (user) => ({
 
 const createToken = (user) => jwt.sign({ id: user.id || user._id, role: user.role }, jwtSecret(), { expiresIn: '7d' });
 
-// Envía tanto la cookie como el parámetro en URL para compatibilidad total con Brave/Safari
 const sendSession = (res, user, redirect = false) => {
   const token = createToken(user);
   res.cookie('token', token, cookieOptions);
@@ -75,6 +76,7 @@ const isTrustedDevice = (email, deviceId, token) => {
   return signature?.length === expected.length && crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 };
 
+// Registro local con verificación OTP
 router.post('/register', async (req, res) => {
   try {
     const rawEmail = req.body.email || req.body.mail;
@@ -107,6 +109,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
+// Login directo con correo y contraseña (requiere 2FA Authenticator solo si está activo)
 router.post('/login', async (req, res) => {
   const rawEmail = req.body.email || req.body.mail;
   const email = rawEmail ? String(rawEmail).trim().toLowerCase() : '';
@@ -121,17 +124,9 @@ router.post('/login', async (req, res) => {
   if (user.twoFactorEnabled) {
     return res.json({ success: true, require2FA: true, userId: user._id, email: user.email });
   }
-  const deviceId = req.body.deviceId || req.header('x-device-id');
-  const trustedToken = req.cookies?.trusted_device;
-  if (isTrustedDevice(user.email, deviceId, trustedToken)) {
-    return sendSession(res, user);
-  }
-  const otpCode = createOtp();
-  user.otpCode = otpCode;
-  user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
-  await user.save();
-  await sendOTPEmail(user.email, otpCode, 'inicio de sesión');
-  return res.json({ success: true, requireLoginOTP: true, email: user.email });
+
+  // Inicio de sesión directo sin bloqueos
+  return sendSession(res, user);
 });
 
 router.post('/verify-otp', async (req, res) => {
@@ -265,7 +260,6 @@ router.post('/forgot-password', async (req, res) => {
     user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
     await user.save();
 
-    // Despacho no bloqueante
     sendPasswordResetEmail(user.email, token)
       .then((ok) => {
         if (ok) console.log('✓ Correo de recuperación enviado a:', user.email);
@@ -280,7 +274,7 @@ router.post('/forgot-password', async (req, res) => {
   }
 });
 
-// Restablecimiento de contraseña
+// Restablecimiento de contraseña con envío de confirmación de seguridad
 router.post('/reset-password/:token', async (req, res) => {
   try {
     if (!req.body.password || !passwordRegex.test(req.body.password)) {
@@ -292,7 +286,7 @@ router.post('/reset-password/:token', async (req, res) => {
     }).select('+password +resetPasswordToken +resetPasswordExpires');
 
     if (!user) {
-      return res.status(400).json({ message: 'Reset token is invalid or expired' });
+      return res.status(400).json({ message: 'El enlace de recuperación es inválido o ya fue utilizado.' });
     }
 
     user.password = await bcrypt.hash(req.body.password, 12);
@@ -300,6 +294,13 @@ router.post('/reset-password/:token', async (req, res) => {
     user.resetPasswordExpires = undefined;
     user.isVerified = true;
     await user.save();
+
+    // Notificación automática al usuario por motivos de seguridad
+    sendPasswordChangedEmail(user.email)
+      .then((ok) => {
+        if (ok) console.log('✓ Notificación de cambio de clave enviada a:', user.email);
+      })
+      .catch((err) => console.error('Error enviando confirmación de clave:', err.message));
 
     return res.json({ message: 'Password updated' });
   } catch (error) {

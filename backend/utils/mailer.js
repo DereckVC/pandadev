@@ -16,11 +16,12 @@ const emailLayout = ({ title, intro, actionLabel, link, expiry }) => `
       </div>
       <h1 style="margin:0 0 16px;color:#ffffff;font-size:24px;">${title}</h1>
       <p style="margin:0 0 24px;color:#c4c4cc;font-size:15px;line-height:1.7;">${intro}</p>
+      ${actionLabel && link ? `
       <div style="text-align:center;margin:32px 0;">
         <a href="${link}" style="display:inline-block;padding:14px 24px;border-radius:10px;background:#8b5cf6;color:#ffffff;font-weight:700;text-decoration:none;">${actionLabel}</a>
-      </div>
+      </div>` : ''}
       <p style="margin:0 0 12px;color:#8f8f9d;font-size:13px;">${expiry}</p>
-      <p style="margin:0;color:#8f8f9d;font-size:12px;line-height:1.6;word-break:break-all;">Si el botón no funciona, copia este enlace:<br>${link}</p>
+      ${link ? `<p style="margin:0;color:#8f8f9d;font-size:12px;line-height:1.6;word-break:break-all;">Si el botón no funciona, copia este enlace:<br>${link}</p>` : ''}
     </div>
   </div>
 `;
@@ -73,6 +74,21 @@ async function sendPasswordResetEmail(toEmail, resetToken) {
   });
 }
 
+async function sendPasswordChangedEmail(toEmail) {
+  return sendMail({
+    to: toEmail,
+    subject: 'Tu contraseña de PandaDev ha sido actualizada',
+    text: 'Te confirmamos que la contraseña de tu cuenta de PandaDev se ha modificado exitosamente. Si no realizaste esta acción, contáctanos de inmediato.',
+    html: emailLayout({
+      title: 'Contraseña actualizada con éxito',
+      intro: 'Te confirmamos que la contraseña de tu cuenta en PandaDev ha sido cambiada recientemente. Ya puedes iniciar sesión con tus nuevas credenciales.',
+      actionLabel: 'Iniciar Sesión',
+      link: `${frontendUrl}/login`,
+      expiry: 'Si tú no realizaste este cambio, solicita un restablecimiento de clave de inmediato para proteger tu cuenta.',
+    }),
+  });
+}
+
 async function sendVerificationEmail(toEmail, verifyToken) {
   const link = `${frontendUrl}/login?verify=${verifyToken}`;
   return sendMail({
@@ -112,4 +128,9 @@ async function sendOTPEmail(toEmail, otp, purpose = 'verificación de correo') {
   });
 }
 
-module.exports = { sendPasswordResetEmail, sendVerificationEmail, sendOTPEmail };
+module.exports = {
+  sendPasswordResetEmail,
+  sendPasswordChangedEmail,
+  sendVerificationEmail,
+  sendOTPEmail
+};
