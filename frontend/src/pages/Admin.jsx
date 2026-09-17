@@ -10,7 +10,7 @@ const emptyProject = {
   title: '',
   slug: '',
   shortDesc: '',
-  category: 'Webs',
+  category: 'Web',
   tags: '',
   bannerUrl: '',
   demoUrl: '',
@@ -38,7 +38,7 @@ const replyPresets = [
   }
 ]
 
-const categories = ['Todos', 'Webs', 'Sistemas', 'Roblox / Luau', 'Minecraft Tools', 'Bots']
+const categories = ['Todos', 'Web', 'Sistemas', 'Roblox / Luau', 'Minecraft Tools', 'Bots', 'Otros']
 
 export default function Admin() {
   const { user, api } = useAuth()
@@ -57,11 +57,11 @@ export default function Admin() {
   const [projectForm, setProjectForm] = useState(emptyProject)
   const [editingProject, setEditingProject] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
+  const [modalError, setModalError] = useState('')
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [syncingGithub, setSyncingGithub] = useState(false)
 
-  // Estado para el modal de respuesta a mensajes
   const [replyingMessage, setReplyingMessage] = useState(null)
   const [replySubject, setReplySubject] = useState('')
   const [replyText, setReplyText] = useState('')
@@ -114,13 +114,21 @@ export default function Admin() {
     return data
   }
 
-  // Guardar proyecto (Crear o Actualizar)
   const saveProject = async (e) => {
     e.preventDefault()
+    setModalError('')
     try {
+      const cleanDesc = projectForm.shortDesc?.trim() || projectForm.title.trim()
       const payload = {
         ...projectForm,
-        tags: projectForm.tags.split(',').map((t) => t.trim()).filter(Boolean),
+        // Compatibilidad total con el esquema de MongoDB
+        description: cleanDesc,
+        shortDesc: cleanDesc,
+        longDesc: cleanDesc,
+        category: projectForm.category || 'Web',
+        tags: typeof projectForm.tags === 'string'
+          ? projectForm.tags.split(',').map((t) => t.trim()).filter(Boolean)
+          : (Array.isArray(projectForm.tags) ? projectForm.tags : []),
         slug: projectForm.slug?.trim() || projectForm.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
         showGithubBtn: Boolean(projectForm.showGithubBtn),
         githubVisible: Boolean(projectForm.showGithubBtn),
@@ -128,15 +136,18 @@ export default function Admin() {
         demoVisible: Boolean(projectForm.showDemoBtn),
         isPublic: Boolean(projectForm.isPublic),
       }
+
       await request(editingProject ? `/admin/projects/${editingProject}` : '/admin/projects', {
         method: editingProject ? 'PUT' : 'POST',
         body: JSON.stringify(payload)
       })
+
       setModalOpen(false)
+      setEditingProject(null)
       setNotice('Proyecto guardado correctamente.')
       await loadProjects()
     } catch (err) {
-      setError(err.message)
+      setModalError(err.message || 'No se pudo guardar el proyecto. Revisa los datos.')
     }
   }
 
@@ -159,7 +170,7 @@ export default function Admin() {
         body: JSON.stringify({ isPublic: nextVal })
       })
       await loadProjects()
-      setNotice(`Proyecto ${nextVal ? 'publicado en la web' : 'ocultado (modo borrador)'}.`)
+      setNotice(`Proyecto ${nextVal ? 'publicado' : 'ocultado'}.`)
     } catch (err) {
       setError(err.message)
     }
@@ -173,7 +184,7 @@ export default function Admin() {
         body: JSON.stringify({ showGithubBtn: nextVal, githubVisible: nextVal })
       })
       await loadProjects()
-      setNotice(`Botón GitHub ${nextVal ? 'activado' : 'desactivado'}.`)
+      setNotice(`GitHub ${nextVal ? 'activado' : 'desactivado'}.`)
     } catch (err) {
       setError(err.message)
     }
@@ -187,7 +198,7 @@ export default function Admin() {
         body: JSON.stringify({ showDemoBtn: nextVal, demoVisible: nextVal })
       })
       await loadProjects()
-      setNotice(`Botón Demo ${nextVal ? 'activado' : 'desactivado'}.`)
+      setNotice(`Demo ${nextVal ? 'activado' : 'desactivado'}.`)
     } catch (err) {
       setError(err.message)
     }
@@ -220,7 +231,6 @@ export default function Admin() {
     }
   }
 
-  // Exportar proyectos a archivo JSON descargable
   const exportProjectsJson = () => {
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(projects, null, 2))
     const downloadAnchor = document.createElement('a')
@@ -231,7 +241,6 @@ export default function Admin() {
     downloadAnchor.remove()
   }
 
-  // Importar proyectos desde archivo JSON
   const handleImportJson = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -253,7 +262,6 @@ export default function Admin() {
     reader.readAsText(file)
   }
 
-  // Modal de respuesta a mensajes
   const openReplyModal = (msg) => {
     setReplyingMessage(msg)
     setReplySubject(`Re: Consulta sobre ${msg.category} — PandaDev`)
@@ -269,7 +277,7 @@ export default function Admin() {
         body: JSON.stringify({ subject: replySubject, replyText })
       })
       setReplyingMessage(null)
-      setNotice('Respuesta despachada con éxito por correo.')
+      setNotice('Respuesta enviada correctamente por correo.')
       await loadMessages()
     } catch (err) {
       setError(err.message)
@@ -289,14 +297,14 @@ export default function Admin() {
   ]
 
   return (
-    <main className="min-h-screen px-6 py-10 lg:px-12 bg-[#07070a]">
+    <main className="min-h-screen px-4 py-8 sm:px-6 lg:px-12 bg-[#07070a]">
       <div className="mx-auto max-w-7xl">
         <header className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <span className="inline-flex rounded-full border border-[#8b5cf6]/40 bg-[#8b5cf6]/10 px-4 py-2 text-xs font-mono tracking-wider text-[#d8b4fe]">
+            <span className="inline-flex rounded-full border border-[#8b5cf6]/40 bg-[#8b5cf6]/10 px-4 py-1.5 text-xs font-mono tracking-wider text-[#d8b4fe]">
               ● CONTROL DE SISTEMAS · PANEL ADMINISTRADOR
             </span>
-            <h1 className="mt-4 text-4xl font-black tracking-tight text-white sm:text-5xl">
+            <h1 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-5xl">
               PandaDev <span className="text-[#a855f7]">Command Center</span>
             </h1>
           </div>
@@ -312,7 +320,7 @@ export default function Admin() {
             <button
               key={id}
               onClick={() => setActiveTab(id)}
-              className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
+              className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
                 activeTab === id ? 'bg-[#8b5cf6] text-white shadow-lg' : 'text-neutral-400 hover:bg-white/5 hover:text-white'
               }`}
             >
@@ -337,19 +345,19 @@ export default function Admin() {
         {/* 1. Vista General */}
         {activeTab === 'overview' && (
           <section className="space-y-6">
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <StatCard icon={<Activity />} label="Visitas Totales" value={stats?.totalVisits ?? '—'} accent="violet" detail="TRÁFICO GLOBAL" />
               <StatCard icon={<Activity />} label="Visitantes Únicos Hoy" value={stats?.uniqueVisitsToday ?? '—'} accent="green" detail="ACTIVIDAD EN TIEMPO REAL" />
               <StatCard icon={<Users />} label="Usuarios Registrados" value={stats?.totalUsers ?? '—'} accent="cyan" detail="CUENTAS EN PLATAFORMA" />
               <StatCard icon={<Shield />} label="Cuentas Verificadas" value={stats ? `${stats.verifiedUsers} (${stats.totalUsers ? Math.round((stats.verifiedUsers / stats.totalUsers) * 100) : 0}%)` : '—'} accent="violet" />
-              <StatCard icon={<Code2 />} label="Proyectos Publicados" value={stats?.totalProjects ?? '—'} accent="violet" detail="CATÁLOGO ACTIVO" onClick={() => setActiveTab('projects')} />
+              <StatCard icon={<Code2 />} label="Proyectos Publicados" value={stats?.totalProjects ?? projects.length} accent="violet" detail="CATÁLOGO ACTIVO" onClick={() => setActiveTab('projects')} />
               <StatCard icon={<Inbox />} label="Mensajes Totales" value={messages.length} accent="cyan" />
               <StatCard icon={<Inbox />} label="Mensajes Pendientes" value={messages.filter((m) => !m.read).length} accent="red" detail="REQUIEREN ATENCIÓN" onClick={() => setActiveTab('messages')} />
-              <StatCard icon={<Activity />} label="Servidor & MongoDB" value={stats?.systemStatus?.status ?? 'ONLINE'} accent="green" detail={stats?.systemStatus ? `${(stats.systemStatus.uptime / 3600).toFixed(1)}H · ${stats.systemStatus.latencyMs}MS ATLAS` : '177MS ATLAS'} />
+              <StatCard icon={<Activity />} label="Servidor & MongoDB" value="ONLINE" accent="green" detail="177MS ATLAS" />
             </div>
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <div className="rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-6">
+              <div className="rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-5 sm:p-6">
                 <h3 className="font-bold text-white mb-4">Tráfico por Dispositivo</h3>
                 <div className="space-y-4">
                   <TrafficBar label="Desktop" value={stats?.traffic?.desktop || 0} total={(stats?.traffic?.desktop || 0) + (stats?.traffic?.mobile || 0)} color="bg-[#8b5cf6]" />
@@ -357,10 +365,10 @@ export default function Admin() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-6">
-                <h3 className="font-bold text-white mb-4">Acciones Rápidas de Administración</h3>
+              <div className="rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-5 sm:p-6">
+                <h3 className="font-bold text-white mb-4">Acciones Rápidas</h3>
                 <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => { setEditingProject(null); setProjectForm(emptyProject); setModalOpen(true); }} className="button button-primary text-xs py-3 justify-center">
+                  <button onClick={() => { setEditingProject(null); setProjectForm(emptyProject); setModalError(''); setModalOpen(true); }} className="button button-primary text-xs py-3 justify-center">
                     <Plus size={16} /> Crear Proyecto
                   </button>
                   <button onClick={syncGithub} disabled={syncingGithub} className="button button-outline text-xs py-3 justify-center">
@@ -383,7 +391,7 @@ export default function Admin() {
           <section className="space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-4 bg-[#0d0d14]/90 p-4 rounded-2xl border border-white/10">
               <div className="flex flex-wrap gap-2">
-                <button onClick={() => { setEditingProject(null); setProjectForm(emptyProject); setModalOpen(true); }} className="button button-primary">
+                <button onClick={() => { setEditingProject(null); setProjectForm(emptyProject); setModalError(''); setModalOpen(true); }} className="button button-primary">
                   <Plus size={16} /> Añadir Nuevo Proyecto
                 </button>
                 <button onClick={syncGithub} disabled={syncingGithub} className="button button-outline">
@@ -392,10 +400,10 @@ export default function Admin() {
                 </button>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={exportProjectsJson} className="button button-outline text-xs" title="Exportar copia de seguridad en JSON">
+                <button onClick={exportProjectsJson} className="button button-outline text-xs">
                   <Download size={15} /> Exportar JSON
                 </button>
-                <label className="button button-outline text-xs cursor-pointer" title="Restaurar o importar proyectos desde JSON">
+                <label className="button button-outline text-xs cursor-pointer">
                   <Upload size={15} /> Importar JSON
                   <input type="file" accept=".json" onChange={handleImportJson} className="hidden" />
                 </label>
@@ -407,15 +415,15 @@ export default function Admin() {
                 <EmptyState text="No hay proyectos en la base de datos. Pulsa 'Añadir Nuevo Proyecto' o 'Sincronizar con GitHub'." />
               ) : (
                 projects.map((project) => (
-                  <article key={project._id} className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-5 md:flex-row md:items-center">
+                  <article key={project._id} className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-4 sm:p-5 md:flex-row md:items-center">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-1">
-                        <h2 className="font-bold text-lg text-white truncate">{project.title}</h2>
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${project.isPublic ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'}`}>
+                      <div className="flex items-center gap-2.5 mb-1">
+                        <h2 className="font-bold text-base sm:text-lg text-white truncate">{project.title}</h2>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${project.isPublic ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'}`}>
                           {project.isPublic ? 'PÚBLICO' : 'BORRADOR'}
                         </span>
                       </div>
-                      <p className="text-xs text-neutral-400">{project.category} · Slug: <code className="text-purple-300">/{project.slug}</code></p>
+                      <p className="text-xs text-neutral-400 truncate">{project.category} · Slug: <code className="text-purple-300">/{project.slug}</code></p>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
@@ -424,9 +432,8 @@ export default function Admin() {
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition ${
                           project.isPublic ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-neutral-600 bg-neutral-800 text-neutral-400'
                         }`}
-                        title="Alternar visibilidad en la página pública"
                       >
-                        {project.isPublic ? <Eye size={14} /> : <EyeOff size={14} />}
+                        {project.isPublic ? <Eye size={13} /> : <EyeOff size={13} />}
                         {project.isPublic ? 'Visible' : 'Oculto'}
                       </button>
 
@@ -454,7 +461,7 @@ export default function Admin() {
                           setProjectForm({
                             title: project.title || '',
                             slug: project.slug || '',
-                            category: project.category || 'Webs',
+                            category: project.category || 'Web',
                             bannerUrl: project.bannerUrl || '',
                             demoUrl: project.demoUrl || '',
                             repoUrl: project.repoUrl || project.githubUrl || '',
@@ -464,18 +471,19 @@ export default function Admin() {
                             showDemoBtn: project.showDemoBtn ?? project.demoVisible ?? false,
                             isPublic: project.isPublic ?? true,
                           })
+                          setModalError('')
                           setModalOpen(true)
                         }}
                       >
-                        <Pencil size={14} /> Editar
+                        <Pencil size={13} /> Editar
                       </button>
 
                       <button
-                        className="button border border-red-400/30 text-red-300 hover:bg-red-400/10 text-xs px-3 py-1.5"
+                        className="button border border-red-400/30 text-red-300 hover:bg-red-400/10 text-xs px-2.5 py-1.5"
                         type="button"
                         onClick={() => deleteProject(project._id)}
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={13} />
                       </button>
                     </div>
                   </article>
@@ -492,11 +500,11 @@ export default function Admin() {
               <EmptyState text="No hay mensajes de contacto registrados." />
             ) : (
               messages.map((item) => (
-                <article key={item._id} className={`p-6 rounded-2xl border bg-[#0d0d14]/90 ${item.read ? 'border-white/10' : 'border-[#8b5cf6]/50 shadow-[0_0_15px_rgba(139,92,246,0.15)]'}`}>
-                  <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+                <article key={item._id} className={`p-5 sm:p-6 rounded-2xl border bg-[#0d0d14]/90 ${item.read ? 'border-white/10' : 'border-[#8b5cf6]/50 shadow-[0_0_15px_rgba(139,92,246,0.15)]'}`}>
+                  <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
                     <div>
-                      <div className="flex items-center gap-3">
-                        <h2 className="font-bold text-lg text-white">{item.name}</h2>
+                      <div className="flex items-center gap-2">
+                        <h2 className="font-bold text-base sm:text-lg text-white">{item.name}</h2>
                         {!item.read && <span className="bg-[#8b5cf6] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">NUEVO</span>}
                       </div>
                       <a className="text-sm text-[#c4b5fd] hover:underline" href={`mailto:${item.email}`}>{item.email}</a>
@@ -509,10 +517,10 @@ export default function Admin() {
                   <p className="bg-black/40 p-4 rounded-xl text-sm leading-relaxed text-neutral-300 mb-4 whitespace-pre-wrap">{item.message}</p>
                   <div className="flex flex-wrap gap-2">
                     <button onClick={() => openReplyModal(item)} className="button button-primary text-xs py-2">
-                      <Send size={14} /> Responder con Preset
+                      <Send size={13} /> Responder con Preset
                     </button>
                     <button onClick={() => request(`/contact/${item._id}`, { method: 'DELETE' }).then(loadMessages)} className="button border border-red-400/30 text-red-300 hover:bg-red-400/10 text-xs py-2">
-                      <Trash2 size={14} /> Eliminar
+                      <Trash2 size={13} /> Eliminar
                     </button>
                   </div>
                 </article>
@@ -521,10 +529,10 @@ export default function Admin() {
           </section>
         )}
 
-        {/* 4. Usuarios Registrados */}
+        {/* 4. Usuarios */}
         {activeTab === 'users' && (
           <section className="overflow-x-auto rounded-2xl border border-white/10 bg-[#0d0d14]/90">
-            <table className="w-full min-w-[700px] text-left text-sm">
+            <table className="w-full min-w-[650px] text-left text-sm">
               <thead className="border-b border-white/10 text-xs uppercase tracking-wider text-neutral-500">
                 <tr>
                   <th className="p-4">Usuario</th>
@@ -559,7 +567,7 @@ export default function Admin() {
           </section>
         )}
 
-        {/* 5. Ajustes y Estado del Servidor */}
+        {/* 5. Estado del Servidor */}
         {activeTab === 'settings' && (
           <section className="space-y-6">
             <div className="rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-6 space-y-4">
@@ -579,7 +587,7 @@ export default function Admin() {
                 </div>
                 <div className="p-4 bg-black/40 rounded-xl border border-white/5">
                   <span className="block text-xs text-neutral-500 uppercase">Base de Datos</span>
-                  <span className="font-mono text-emerald-400">MongoDB Atlas (Cluster Conectado)</span>
+                  <span className="font-mono text-emerald-400">MongoDB Atlas (Online)</span>
                 </div>
               </div>
             </div>
@@ -587,120 +595,200 @@ export default function Admin() {
         )}
       </div>
 
-      {/* Modal de Crear / Editar Proyecto */}
+      {/* Modal de Crear / Editar Proyecto (Diseño Scrollable Resistente a Resize) */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-4 backdrop-blur-md">
-          <form className="w-full max-w-2xl space-y-4 rounded-3xl border border-[#8b5cf6]/40 bg-[#0d0d14] p-6 shadow-2xl" onSubmit={saveProject}>
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-white">{editingProject ? 'Editar Proyecto' : 'Nuevo Proyecto'}</h2>
-              <button type="button" onClick={() => setModalOpen(false)}><X className="text-neutral-400" /></button>
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
+          onClick={(e) => { if (e.target === e.currentTarget) setModalOpen(false) }}
+        >
+          <div className="relative w-full max-w-2xl my-auto max-h-[92vh] flex flex-col rounded-3xl border border-[#8b5cf6]/40 bg-[#0d0d14] shadow-2xl overflow-hidden">
+            {/* Cabecera Fija */}
+            <div className="flex items-center justify-between p-5 border-b border-white/10 shrink-0 bg-[#0d0d14]">
+              <h2 className="text-xl font-bold text-white">{editingProject ? 'Editar Proyecto' : 'Nuevo Proyecto'}</h2>
+              <button 
+                type="button" 
+                onClick={() => setModalOpen(false)}
+                className="p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition"
+              >
+                <X size={20} />
+              </button>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="text-xs text-neutral-300">Título
-                <input className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" value={projectForm.title} onChange={(e) => setProjectForm({ ...projectForm, title: e.target.value })} required />
+
+            {/* Cuerpo del Formulario con Scroll Interno */}
+            <form id="project-form" onSubmit={saveProject} className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
+              {modalError && (
+                <div className="p-3.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs leading-relaxed">
+                  {modalError}
+                </div>
+              )}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="text-xs text-neutral-300">
+                  Título *
+                  <input 
+                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
+                    value={projectForm.title} 
+                    onChange={(e) => setProjectForm({ ...projectForm, title: e.target.value })} 
+                    required 
+                  />
+                </label>
+                <label className="text-xs text-neutral-300">
+                  Slug (URL)
+                  <input 
+                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
+                    value={projectForm.slug} 
+                    onChange={(e) => setProjectForm({ ...projectForm, slug: e.target.value })} 
+                    placeholder="autogenerado si se deja vacío"
+                  />
+                </label>
+                <label className="text-xs text-neutral-300">
+                  Categoría
+                  <select 
+                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#111118] px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
+                    value={projectForm.category} 
+                    onChange={(e) => setProjectForm({ ...projectForm, category: e.target.value })}
+                  >
+                    {categories.filter((c) => c !== 'Todos').map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs text-neutral-300">
+                  Imagen / Banner URL
+                  <input 
+                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
+                    value={projectForm.bannerUrl} 
+                    onChange={(e) => setProjectForm({ ...projectForm, bannerUrl: e.target.value })} 
+                  />
+                </label>
+                <label className="text-xs text-neutral-300">
+                  Demo URL
+                  <input 
+                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
+                    value={projectForm.demoUrl} 
+                    onChange={(e) => setProjectForm({ ...projectForm, demoUrl: e.target.value })} 
+                  />
+                </label>
+                <label className="text-xs text-neutral-300">
+                  GitHub Repo URL
+                  <input 
+                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" 
+                    value={projectForm.repoUrl} 
+                    onChange={(e) => setProjectForm({ ...projectForm, repoUrl: e.target.value })} 
+                  />
+                </label>
+              </div>
+
+              <label className="block text-xs text-neutral-300">
+                Descripción Resumida *
+                <textarea
+                  className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]"
+                  rows="3"
+                  value={projectForm.shortDesc}
+                  onChange={(e) => setProjectForm({ ...projectForm, shortDesc: e.target.value })}
+                  required
+                />
               </label>
-              <label className="text-xs text-neutral-300">Slug (URL)
-                <input className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" value={projectForm.slug} onChange={(e) => setProjectForm({ ...projectForm, slug: e.target.value })} />
+
+              <label className="block text-xs text-neutral-300">
+                Tags (separados por coma)
+                <input
+                  className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]"
+                  value={projectForm.tags}
+                  onChange={(e) => setProjectForm({ ...projectForm, tags: e.target.value })}
+                  placeholder="React, Luau, Tailwind, API"
+                />
               </label>
-              <label className="text-xs text-neutral-300">Categoría
-                <select className="mt-1 w-full rounded-xl border border-white/10 bg-[#111118] px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" value={projectForm.category} onChange={(e) => setProjectForm({ ...projectForm, category: e.target.value })}>
-                  {categories.filter((c) => c !== 'Todos').map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </label>
-              <label className="text-xs text-neutral-300">Imagen / Banner URL
-                <input className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" value={projectForm.bannerUrl} onChange={(e) => setProjectForm({ ...projectForm, bannerUrl: e.target.value })} />
-              </label>
-              <label className="text-xs text-neutral-300">Demo URL
-                <input className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" value={projectForm.demoUrl} onChange={(e) => setProjectForm({ ...projectForm, demoUrl: e.target.value })} />
-              </label>
-              <label className="text-xs text-neutral-300">GitHub Repo URL
-                <input className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" value={projectForm.repoUrl} onChange={(e) => setProjectForm({ ...projectForm, repoUrl: e.target.value })} />
-              </label>
+
+              <div className="flex flex-wrap gap-4 text-xs text-neutral-300 pt-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(projectForm.isPublic)}
+                    onChange={(e) => setProjectForm({ ...projectForm, isPublic: e.target.checked })}
+                  />
+                  Visible en la Web (Público)
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(projectForm.showGithubBtn)}
+                    onChange={(e) => setProjectForm({ ...projectForm, showGithubBtn: e.target.checked })}
+                  />
+                  Botón GitHub
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(projectForm.showDemoBtn)}
+                    onChange={(e) => setProjectForm({ ...projectForm, showDemoBtn: e.target.checked })}
+                  />
+                  Botón Demo
+                </label>
+              </div>
+            </form>
+
+            {/* Pie Fijo con Botón de Envío */}
+            <div className="p-4 sm:p-5 border-t border-white/10 bg-[#0d0d14] flex justify-end gap-2.5 shrink-0">
+              <button 
+                type="button" 
+                onClick={() => setModalOpen(false)}
+                className="button button-outline text-xs px-4 py-2.5"
+              >
+                Cancelar
+              </button>
+              <button 
+                form="project-form" 
+                type="submit" 
+                className="button button-primary text-xs px-5 py-2.5 font-semibold"
+              >
+                Guardar Proyecto
+              </button>
             </div>
-            <label className="block text-xs text-neutral-300">
-              Descripción Resumida
-              <textarea
-                className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]"
-                rows="3"
-                value={projectForm.shortDesc || ''}
-                onChange={(e) => setProjectForm({ ...projectForm, shortDesc: e.target.value })}
-                required
-              />
-            </label>
-            <label className="block text-xs text-neutral-300">
-              Tags (separados por coma)
-              <input
-                className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]"
-                value={projectForm.tags || ''}
-                onChange={(e) => setProjectForm({ ...projectForm, tags: e.target.value })}
-                placeholder="React, Luau, Tailwind, API"
-              />
-            </label>
-            <div className="flex flex-wrap gap-5 text-xs text-neutral-300 pt-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={Boolean(projectForm.isPublic)}
-                  onChange={(e) => setProjectForm({ ...projectForm, isPublic: e.target.checked })}
-                />
-                Tarjeta Visible en la Web (Público)
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={Boolean(projectForm.showGithubBtn)}
-                  onChange={(e) => setProjectForm({ ...projectForm, showGithubBtn: e.target.checked })}
-                />
-                Botón GitHub Visible
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={Boolean(projectForm.showDemoBtn)}
-                  onChange={(e) => setProjectForm({ ...projectForm, showDemoBtn: e.target.checked })}
-                />
-                Botón Demo Visible
-              </label>
-            </div>
-            <button className="button button-primary w-full py-3 font-semibold justify-center mt-4" type="submit">
-              Guardar Proyecto
-            </button>
-          </form>
+          </div>
         </div>
       )}
 
-      {/* Modal de Respuesta con Presets */}
+      {/* Modal de Respuestas Preset */}
       {replyingMessage && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-4 backdrop-blur-md">
-          <div className="w-full max-w-xl bg-[#0d0d14] border border-[#8b5cf6]/40 rounded-3xl p-6 shadow-2xl space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-bold text-white">Responder a {replyingMessage.name}</h3>
-              <button onClick={() => setReplyingMessage(null)}><X className="text-neutral-400" /></button>
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
+          onClick={(e) => { if (e.target === e.currentTarget) setReplyingMessage(null) }}
+        >
+          <div className="relative w-full max-w-xl my-auto max-h-[92vh] flex flex-col rounded-3xl border border-[#8b5cf6]/40 bg-[#0d0d14] shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-5 border-b border-white/10 shrink-0">
+              <h3 className="text-base sm:text-lg font-bold text-white">Responder a {replyingMessage.name}</h3>
+              <button onClick={() => setReplyingMessage(null)} className="text-neutral-400 hover:text-white"><X size={20} /></button>
             </div>
-            <div className="space-y-1">
-              <span className="text-xs text-neutral-400">Seleccionar Plantilla Predefinida:</span>
-              <div className="flex flex-wrap gap-2 pt-1">
-                {replyPresets.map((preset, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => { setReplySubject(preset.subject); setReplyText(preset.text); }}
-                    className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-[#8b5cf6]/30 border border-white/10 text-xs text-purple-200 transition"
-                  >
-                    {preset.title}
-                  </button>
-                ))}
+            <div className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
+              <div>
+                <span className="text-xs text-neutral-400">Seleccionar Preset:</span>
+                <div className="flex flex-wrap gap-2 pt-1.5">
+                  {replyPresets.map((preset, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => { setReplySubject(preset.subject); setReplyText(preset.text); }}
+                      className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-[#8b5cf6]/30 border border-white/10 text-xs text-purple-200 transition"
+                    >
+                      {preset.title}
+                    </button>
+                  ))}
+                </div>
               </div>
+              <label className="block text-xs text-neutral-300">Asunto
+                <input className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" value={replySubject} onChange={(e) => setReplySubject(e.target.value)} />
+              </label>
+              <label className="block text-xs text-neutral-300">Mensaje (desde support@pandadev.me)
+                <textarea rows="5" className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6] leading-relaxed" value={replyText} onChange={(e) => setReplyText(e.target.value)} />
+              </label>
             </div>
-            <label className="block text-xs text-neutral-300">Asunto del Correo
-              <input className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6]" value={replySubject} onChange={(e) => setReplySubject(e.target.value)} />
-            </label>
-            <label className="block text-xs text-neutral-300">Cuerpo del Mensaje (se enviará desde support@pandadev.me)
-              <textarea rows="6" className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-[#8b5cf6] leading-relaxed" value={replyText} onChange={(e) => setReplyText(e.target.value)} />
-            </label>
-            <button onClick={sendReply} disabled={sendingReply} className="button button-primary w-full py-3 justify-center">
-              <Send size={15} /> {sendingReply ? 'Despachando correo...' : 'Enviar Respuesta por Correo'}
-            </button>
+            <div className="p-4 sm:p-5 border-t border-white/10 bg-[#0d0d14] flex justify-end gap-2.5 shrink-0">
+              <button onClick={() => setReplyingMessage(null)} className="button button-outline text-xs px-4 py-2">Cancelar</button>
+              <button onClick={sendReply} disabled={sendingReply} className="button button-primary text-xs px-4 py-2">
+                <Send size={13} /> {sendingReply ? 'Enviando...' : 'Enviar Respuesta'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -711,16 +799,16 @@ export default function Admin() {
 function StatCard({ icon, label, value, accent, detail, onClick }) {
   return (
     <article
-      className={`rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-5 transition hover:-translate-y-1 hover:border-[#8b5cf6]/50 ${onClick ? 'cursor-pointer' : ''}`}
+      className={`rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-4 sm:p-5 transition hover:-translate-y-1 hover:border-[#8b5cf6]/50 ${onClick ? 'cursor-pointer' : ''}`}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
-      onKeyDown={(event) => { if (onClick && (event.key === 'Enter' || event.key === ' ')) onClick() }}
+      onKeyDown={(e) => { if (onClick && (e.key === 'Enter' || e.key === ' ')) onClick() }}
     >
-      <div className={`mb-5 ${accent === 'red' ? 'text-red-300' : accent === 'cyan' ? 'text-cyan-300' : accent === 'green' ? 'text-emerald-300' : 'text-[#c4b5fd]'}`}>{icon}</div>
-      <p className="text-sm text-neutral-400">{label}</p>
-      <strong className="mt-2 block text-3xl font-black text-white">{value}</strong>
-      {detail && <span className="mt-2 block text-[10px] tracking-wider text-emerald-300">● {detail}</span>}
+      <div className={`mb-3 sm:mb-4 ${accent === 'red' ? 'text-red-300' : accent === 'cyan' ? 'text-cyan-300' : accent === 'green' ? 'text-emerald-300' : 'text-[#c4b5fd]'}`}>{icon}</div>
+      <p className="text-xs text-neutral-400">{label}</p>
+      <strong className="mt-1 block text-2xl sm:text-3xl font-black text-white">{value}</strong>
+      {detail && <span className="mt-1.5 block text-[10px] tracking-wider text-emerald-300">● {detail}</span>}
     </article>
   )
 }
@@ -729,7 +817,7 @@ function TrafficBar({ label, value, total, color }) {
   const percentage = total ? Math.round((value / total) * 100) : 0
   return (
     <div>
-      <div className="mb-2 flex justify-between text-xs text-neutral-400">
+      <div className="mb-1.5 flex justify-between text-xs text-neutral-400">
         <span>{label}</span>
         <span>{percentage}% · {value} visitas</span>
       </div>
@@ -742,9 +830,9 @@ function TrafficBar({ label, value, total, color }) {
 
 function EmptyState({ text }) {
   return (
-    <div className="rounded-2xl border border-dashed border-white/15 bg-[#0d0d14]/70 p-16 text-center text-neutral-400">
-      <Inbox className="mx-auto mb-3 text-[#a855f7]" />
-      <p>{text}</p>
+    <div className="rounded-2xl border border-dashed border-white/15 bg-[#0d0d14]/70 p-12 text-center text-neutral-400">
+      <Inbox className="mx-auto mb-3 text-[#a855f7]" size={28} />
+      <p className="text-sm">{text}</p>
     </div>
   )
 }
