@@ -1,17 +1,21 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns');
 
-const emailUser = process.env.EMAIL_USER;
-const emailPass = process.env.EMAIL_PASS;
+// Prioriza IPv4 para evitar que la conexión se congele 40 segundos en la nube
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
+
+const emailUser = (process.env.EMAIL_USER || '').trim();
+const emailPass = (process.env.EMAIL_PASS || '').trim().replace(/\s+/g, '');
 const frontendUrl = (process.env.FRONTEND_URL || 'https://www.pandadev.me').replace(/\/+$/, '');
 
 const sender = `"PandaDev Security" <${emailUser}>`;
-
-// Configuración directa con IPv4 forzado para evitar bloqueos en la nube de Render
 const transporter = nodemailer.createTransport({
+  service: 'gmail',
   host: 'smtp.gmail.com',
   port: 465,
   secure: true,
-  family: 4, // Evita que Render intente IPv6 y se congele 40 segundos
   auth: {
     user: emailUser,
     pass: emailPass,
@@ -20,7 +24,7 @@ const transporter = nodemailer.createTransport({
 
 transporter.verify()
   .then(() => console.log('✓ [SMTP]: Conexión con Gmail verificada exitosamente'))
-  .catch((error) => console.error('Error verificando conexión SMTP:', error.message));
+  .catch((error) => console.error('Error enviando email:', error.message));
 
 const emailLayout = ({ title, intro, actionLabel, link, expiry }) => `
   <div style="margin:0;padding:32px 16px;background:#09090b;color:#f5f5f5;font-family:Arial,Helvetica,sans-serif;">
@@ -41,7 +45,7 @@ const emailLayout = ({ title, intro, actionLabel, link, expiry }) => `
 
 const sendMail = async ({ to, subject, text, html }) => {
   try {
-    const info = await transporter.sendMail({
+    await transporter.sendMail({
       from: sender,
       to,
       subject,
@@ -49,10 +53,10 @@ const sendMail = async ({ to, subject, text, html }) => {
       html,
       headers: { 'X-Priority': '1', Importance: 'high', 'X-Mailer': 'PandaDev Engine' },
     });
-    console.log('✓ Correo despachado con éxito a:', to, 'ID:', info.messageId);
+    console.log('✓ [EMAIL]: Enviado correctamente a', to);
     return true;
   } catch (error) {
-    console.error('❌ Error enviando email a:', to, error.message);
+    console.error('Error enviando email:', error.message);
     return false;
   }
 };

@@ -245,6 +245,7 @@ router.post('/2fa/disable', requireAuth, async (req, res) => {
   return res.json({ user: publicUser(user) });
 });
 
+// Recuperación de contraseña
 router.post('/forgot-password', async (req, res) => {
   try {
     const rawEmail = req.body.email || req.body.mail;
@@ -264,12 +265,13 @@ router.post('/forgot-password', async (req, res) => {
     user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
     await user.save();
 
-    // Despacho con captura de error para que la respuesta nunca quede suspendida
-    try {
-      await sendPasswordResetEmail(user.email, token);
-    } catch (mailError) {
-      console.error('Error enviando correo de recuperación:', mailError.message);
-    }
+    // Despacho no bloqueante
+    sendPasswordResetEmail(user.email, token)
+      .then((ok) => {
+        if (ok) console.log('✓ Correo de recuperación enviado a:', user.email);
+        else console.warn('⚠️ No se pudo despachar el correo a:', user.email);
+      })
+      .catch((err) => console.error('Error enviando correo de recuperación:', err.message));
 
     return res.json({ message: 'Si el correo existe, recibirás un enlace de recuperación.' });
   } catch (error) {
@@ -278,19 +280,27 @@ router.post('/forgot-password', async (req, res) => {
   }
 });
 
+// Restablecimiento de contraseña
 router.post('/reset-password/:token', async (req, res) => {
   try {
     if (!req.body.password || !passwordRegex.test(req.body.password)) {
       return res.status(400).json({ message: 'La contraseña debe tener 8 caracteres, una mayúscula, una minúscula y un número.' });
     }
-    const user = await User.findOne({ resetPasswordToken: req.params.token, resetPasswordExpires: { $gt: new Date() } }).select('+password +resetPasswordToken +resetPasswordExpires');
-    if (!user) return res.status(400).json({ message: 'Reset token is invalid or expired' });
-    
+    const user = await User.findOne({
+      resetPasswordToken: req.params.token,
+      resetPasswordExpires: { $gt: new Date() },
+    }).select('+password +resetPasswordToken +resetPasswordExpires');
+
+    if (!user) {
+      return res.status(400).json({ message: 'Reset token is invalid or expired' });
+    }
+
     user.password = await bcrypt.hash(req.body.password, 12);
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
-    user.isVerified = true; // Activa la cuenta para login local
+    user.isVerified = true;
     await user.save();
+
     return res.json({ message: 'Password updated' });
   } catch (error) {
     console.error('Error en reset-password:', error.message);
