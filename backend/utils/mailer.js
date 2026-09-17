@@ -1,12 +1,17 @@
 const nodemailer = require('nodemailer');
 
-const emailUser = process.env.EMAIL_USER || process.env.SMTP_USER;
-const emailPass = process.env.EMAIL_PASS || process.env.SMTP_PASS;
+const emailUser = process.env.EMAIL_USER;
+const emailPass = process.env.EMAIL_PASS;
 const frontendUrl = (process.env.FRONTEND_URL || 'https://www.pandadev.me').replace(/\/+$/, '');
 
 const sender = `"PandaDev Security" <${emailUser}>`;
+
+// Configuración directa con IPv4 forzado para evitar bloqueos en la nube de Render
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
+  family: 4, // Evita que Render intente IPv6 y se congele 40 segundos
   auth: {
     user: emailUser,
     pass: emailPass,
@@ -36,7 +41,7 @@ const emailLayout = ({ title, intro, actionLabel, link, expiry }) => `
 
 const sendMail = async ({ to, subject, text, html }) => {
   try {
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: sender,
       to,
       subject,
@@ -44,15 +49,15 @@ const sendMail = async ({ to, subject, text, html }) => {
       html,
       headers: { 'X-Priority': '1', Importance: 'high', 'X-Mailer': 'PandaDev Engine' },
     });
+    console.log('✓ Correo despachado con éxito a:', to, 'ID:', info.messageId);
     return true;
   } catch (error) {
-    console.error('Error enviando email:', error.message);
+    console.error('❌ Error enviando email a:', to, error.message);
     return false;
   }
 };
 
 async function sendPasswordResetEmail(toEmail, resetToken) {
-  // Enlace directo al componente ResetPassword en producción
   const link = `${frontendUrl}/reset-password/${resetToken}`;
   return sendMail({
     to: toEmail,

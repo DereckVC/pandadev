@@ -246,31 +246,56 @@ router.post('/2fa/disable', requireAuth, async (req, res) => {
 });
 
 router.post('/forgot-password', async (req, res) => {
-  const rawEmail = req.body.email || req.body.mail;
-  const email = rawEmail ? String(rawEmail).trim().toLowerCase() : '';
+  try {
+    const rawEmail = req.body.email || req.body.mail;
+    const email = rawEmail ? String(rawEmail).trim().toLowerCase() : '';
 
-  const user = await User.findOne({ email }).select('+resetPasswordToken +resetPasswordExpires');
-  if (!user) return res.json({ message: 'Si el correo existe, recibirás un enlace de recuperación.' });
-  const token = crypto.randomBytes(32).toString('hex');
-  user.resetPasswordToken = token;
-  user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
-  await user.save();
-  await sendPasswordResetEmail(user.email, token);
-  return res.json({ message: 'Si el correo existe, recibirás un enlace de recuperación.' });
+    if (!email) {
+      return res.status(400).json({ message: 'Ingresa un correo electrónico válido.' });
+    }
+
+    const user = await User.findOne({ email }).select('+resetPasswordToken +resetPasswordExpires');
+    if (!user) {
+      return res.json({ message: 'Si el correo existe, recibirás un enlace de recuperación.' });
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    user.resetPasswordToken = token;
+    user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
+    await user.save();
+
+    // Despacho con captura de error para que la respuesta nunca quede suspendida
+    try {
+      await sendPasswordResetEmail(user.email, token);
+    } catch (mailError) {
+      console.error('Error enviando correo de recuperación:', mailError.message);
+    }
+
+    return res.json({ message: 'Si el correo existe, recibirás un enlace de recuperación.' });
+  } catch (error) {
+    console.error('Error en /forgot-password:', error.message);
+    return res.status(500).json({ message: 'No se pudo procesar la solicitud de recuperación.' });
+  }
 });
 
 router.post('/reset-password/:token', async (req, res) => {
-  if (!req.body.password || !passwordRegex.test(req.body.password)) {
-    return res.status(400).json({ message: 'La contraseña debe tener 8 caracteres, una mayúscula, una minúscula y un número.' });
+  try {
+    if (!req.body.password || !passwordRegex.test(req.body.password)) {
+      return res.status(400).json({ message: 'La contraseña debe tener 8 caracteres, una mayúscula, una minúscula y un número.' });
+    }
+    const user = await User.findOne({ resetPasswordToken: req.params.token, resetPasswordExpires: { $gt: new Date() } }).select('+password +resetPasswordToken +resetPasswordExpires');
+    if (!user) return res.status(400).json({ message: 'Reset token is invalid or expired' });
+    
+    user.password = await bcrypt.hash(req.body.password, 12);
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    user.isVerified = true; // Activa la cuenta para login local
+    await user.save();
+    return res.json({ message: 'Password updated' });
+  } catch (error) {
+    console.error('Error en reset-password:', error.message);
+    return res.status(500).json({ message: 'Error al actualizar contraseña.' });
   }
-  const user = await User.findOne({ resetPasswordToken: req.params.token, resetPasswordExpires: { $gt: new Date() } }).select('+password +resetPasswordToken +resetPasswordExpires');
-  if (!user) return res.status(400).json({ message: 'Reset token is invalid or expired' });
-  user.password = await bcrypt.hash(req.body.password, 12);
-  user.resetPasswordToken = undefined;
-  user.resetPasswordExpires = undefined;
-  user.provider = 'local';
-  await user.save();
-  return res.json({ message: 'Password updated' });
 });
 
 const upsertOAuthUser = async (profile, provider) => {
