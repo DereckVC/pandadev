@@ -4,10 +4,18 @@ import { ArrowLeft, ArrowRight, Lock, Mail, User } from 'lucide-react'
 import ProviderIcon from '../components/ProviderIcon'
 import { useAuth } from '../contexts/AuthContext'
 
+// Resuelve la API dinámica para OAuth garantizando conexión con Render en producción
 const getApiUrl = () => {
-  const raw = import.meta.env.VITE_API_URL || '/api'
-  return raw.endsWith('/api') ? raw : `${raw.replace(/\/+$/, '')}/api`
+  const envUrl = import.meta.env.VITE_API_URL
+  if (envUrl) {
+    return envUrl.endsWith('/api') ? envUrl : `${envUrl.replace(/\/+$/, '')}/api`
+  }
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+    return 'https://pandadev-api.onrender.com/api'
+  }
+  return 'http://localhost:5000/api'
 }
+
 const API = getApiUrl()
 
 export default function Login() {
@@ -86,11 +94,14 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {isRegister && (
-            <label className="block text-xs text-neutral-300">
-              Nombre Completo
-              <div className="relative mt-1.5">
+            <div className="block text-xs text-neutral-300">
+              <label htmlFor="register-name" className="block mb-1.5">Nombre Completo</label>
+              <div className="relative">
                 <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500" />
                 <input
+                  id="register-name"
+                  name="name"
+                  autoComplete="name"
                   className="w-full rounded-xl border border-white/10 bg-white/5 pl-9 pr-3 py-2 text-white text-xs outline-none focus:border-[#8b5cf6]"
                   placeholder="Tu nombre"
                   value={form.name}
@@ -98,15 +109,18 @@ export default function Login() {
                   required
                 />
               </div>
-            </label>
+            </div>
           )}
 
-          <label className="block text-xs text-neutral-300">
-            Correo Electrónico
-            <div className="relative mt-1.5">
+          <div className="block text-xs text-neutral-300">
+            <label htmlFor="login-email" className="block mb-1.5">Correo Electrónico</label>
+            <div className="relative">
               <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500" />
               <input
+                id="login-email"
+                name="email"
                 type="email"
+                autoComplete="email"
                 className="w-full rounded-xl border border-white/10 bg-white/5 pl-9 pr-3 py-2 text-white text-xs outline-none focus:border-[#8b5cf6]"
                 placeholder="tu@correo.com"
                 value={form.email}
@@ -114,14 +128,17 @@ export default function Login() {
                 required
               />
             </div>
-          </label>
+          </div>
 
-          <label className="block text-xs text-neutral-300">
-            Contraseña
-            <div className="relative mt-1.5">
+          <div className="block text-xs text-neutral-300">
+            <label htmlFor="login-password" className="block mb-1.5">Contraseña</label>
+            <div className="relative">
               <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500" />
               <input
+                id="login-password"
+                name="password"
                 type="password"
+                autoComplete={isRegister ? 'new-password' : 'current-password'}
                 className="w-full rounded-xl border border-white/10 bg-white/5 pl-9 pr-3 py-2 text-white text-xs outline-none focus:border-[#8b5cf6]"
                 placeholder="••••••••"
                 value={form.password}
@@ -129,7 +146,7 @@ export default function Login() {
                 required
               />
             </div>
-          </label>
+          </div>
 
           <button
             type="submit"
