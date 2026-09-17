@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { 
   Activity, Check, Code2, Download, Eye, EyeOff, Globe, Inbox, 
@@ -69,7 +69,6 @@ function ToggleSwitch({ checked, onChange, label, description, size = 'md' }) {
   )
 }
 
-// Resuelve dinámicamente la URL oficial evitando caídas a localhost
 const getApiUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL
   if (envUrl) {
@@ -85,13 +84,13 @@ export default function Admin() {
   const { user, logout } = useAuth()
   const apiBase = getApiUrl()
 
-  const authHeaders = () => {
+  const authHeaders = useCallback(() => {
     const token = localStorage.getItem('token') || localStorage.getItem('panda_token') || ''
     return {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     }
-  }
+  }, [])
 
   const navigate = useNavigate()
 
@@ -110,11 +109,35 @@ export default function Admin() {
   const [error, setError] = useState('')
   const [syncingGithub, setSyncingGithub] = useState(false)
 
+  // Estados de Respuesta y Presets
   const [replyingMessage, setReplyingMessage] = useState(null)
   const [selectedPresetId, setSelectedPresetId] = useState('ack')
   const [replySubject, setReplySubject] = useState('')
   const [replyText, setReplyText] = useState('')
   const [sendingReply, setSendingReply] = useState(false)
+  const [deletingId, setDeletingId] = useState(null)
+
+  const loadMessages = useCallback(async () => {
+    try {
+      const res = await fetch(`${apiBase}/admin/messages`, { credentials: 'include', headers: authHeaders() })
+      if (res.ok) {
+        const m = await res.json()
+        setMessages(m.messages || m)
+      }
+    } catch {
+      // Manejo silencioso en polling
+    }
+  }, [apiBase, authHeaders])
+
+  const loadProjects = useCallback(async () => {
+    try {
+      const res = await fetch(`${apiBase}/admin/projects`, { credentials: 'include', headers: authHeaders() })
+      if (res.ok) {
+        const p = await res.json()
+        setProjects(p.projects || p)
+      }
+    } catch {}
+  }, [apiBase, authHeaders])
 
   useEffect(() => {
     if (!user || user.role !== 'admin') {
@@ -122,13 +145,11 @@ export default function Admin() {
       return
     }
 
-    const loadData = async () => {
+    const loadInitialData = async () => {
       try {
-        const [statsRes, usersRes, projectsRes, messagesRes] = await Promise.all([
+        const [statsRes, usersRes] = await Promise.all([
           fetch(`${apiBase}/admin/stats`, { credentials: 'include', headers: authHeaders() }),
-          fetch(`${apiBase}/admin/users`, { credentials: 'include', headers: authHeaders() }),
-          fetch(`${apiBase}/admin/projects`, { credentials: 'include', headers: authHeaders() }),
-          fetch(`${apiBase}/admin/messages`, { credentials: 'include', headers: authHeaders() })
+          fetch(`${apiBase}/admin/users`, { credentials: 'include', headers: authHeaders() })
         ])
 
         if (statsRes.ok) {
@@ -139,34 +160,27 @@ export default function Admin() {
           const u = await usersRes.json()
           setUsers(u.users || u)
         }
-        if (projectsRes.ok) {
-          const p = await projectsRes.json()
-          setProjects(p.projects || p)
-        }
-        if (messagesRes.ok) {
-          const m = await messagesRes.json()
-          setMessages(m.messages || m)
-        }
+        await Promise.all([loadProjects(), loadMessages()])
       } catch (err) {
         setError(err.message || 'Error al conectar con los servicios del panel')
       }
     }
-    loadData()
-  }, [apiBase, navigate, user])
+    loadInitialData()
 
-  const loadProjects = async () => {
-    const res = await fetch(`${apiBase}/admin/projects`, { credentials: 'include', headers: authHeaders() })
-    if (res.ok) {
-      const p = await res.json()
-      setProjects(p.projects || p)
-    }
-  }
+    // Sincronización automática periódica (Polling cada 8 segundos)
+    const pollInterval = setInterval(() => {
+      loadMessages()
+    }, 8000)
 
-  const loadMessages = async () => {
-    const res = await fetch(`${apiBase}/admin/messages`, { credentials: 'include', headers: authHeaders() })
-    if (res.ok) {
-      const m = await res.json()
-      setMessages(m.messages || m)
+    return () => clearInterval(pollInterval)
+  }, [apiBase, authHeaders, loadMessages, loadProjects, navigate, user])
+
+  // Limpiar contador rojo al entrar a la sección de mensajes
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId)
+    setMobileSidebarOpen(false)
+    if (tabId === 'messages') {
+      setMessages((prev) => prev.map((m) => ({ ...m, read: true })))
     }
   }
 
@@ -233,7 +247,6 @@ export default function Admin() {
     }
   }
 
-  // Switches con actualización instantánea (Optimistic UI: 0ms de retardo)
   const toggleVisibility = async (project) => {
     const nextVal = !project.isPublic
     setProjects((prev) => prev.map((p) => (p._id === project._id ? { ...p, isPublic: nextVal } : p)))
@@ -335,13 +348,13 @@ export default function Admin() {
     reader.readAsText(file)
   }
 
+  // Apertura del modal con presets
   const openReplyModal = (msg) => {
-    setSelectedMessage(msg)
+    setReplyingMessage(msg)
     setSelectedPresetId('ack')
     const defaultPreset = replyPresets[0]
     setReplySubject(`Re: Consulta sobre ${msg.category} — PandaDev`)
     setReplyText(defaultPreset.text)
-    setReplyingMessage(msg)
   }
 
   const applyPreset = (preset) => {
@@ -352,18 +365,21 @@ export default function Admin() {
 
   const sendReply = async (e) => {
     e.preventDefault()
+    if (!replyingMessage) return
     setSendingReply(true)
+    setError('')
+
     try {
       await request(`/admin/messages/${replyingMessage._id}/reply`, {
         method: 'POST',
         body: JSON.stringify({
           subject: replySubject,
-          message: replyText,
-          reply: replyText
+          message: replyText
         })
       })
+      const sentEmail = replyingMessage.email
       setReplyingMessage(null)
-      setNotice('Respuesta despachada con éxito por correo.')
+      setNotice(`Respuesta despachada con éxito a ${sentEmail}`)
       await loadMessages()
     } catch (err) {
       setError(`No se pudo enviar el correo: ${err.message}`)
@@ -372,7 +388,27 @@ export default function Admin() {
     }
   }
 
+  // Eliminación con protección contra doble clic
+  const handleDeleteMessage = async (e, id) => {
+    e.stopPropagation()
+    if (deletingId) return
+    if (!window.confirm('¿Confirmas la eliminación definitiva de este mensaje?')) return
+
+    setDeletingId(id)
+    try {
+      await request(`/admin/messages/${id}`, { method: 'DELETE' })
+      setMessages((prev) => prev.filter((m) => m._id !== id))
+      setNotice('Mensaje eliminado.')
+    } catch (err) {
+      setError(`Error al eliminar: ${err.message}`)
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   if (!user || user.role !== 'admin') return null
+
+  const unreadCount = messages.filter((m) => m.status === 'unread' && !m.read).length
 
   const menuSections = [
     {
@@ -385,7 +421,7 @@ export default function Admin() {
     {
       label: 'Comunicaciones',
       items: [
-        { id: 'messages', label: 'Mensajes Recibidos', icon: <Mail size={17} />, badge: messages.filter((m) => m.status === 'unread' || !m.read).length, badgeAlert: true },
+        { id: 'messages', label: 'Mensajes Recibidos', icon: <Mail size={17} />, badge: unreadCount, badgeAlert: true },
       ]
     },
     {
@@ -423,7 +459,8 @@ export default function Admin() {
               return (
                 <button
                   key={item.id}
-                  onClick={() => { setActiveTab(item.id); setMobileSidebarOpen(false) }}
+                  type="button"
+                  onClick={() => handleTabChange(item.id)}
                   className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                     isActive
                       ? 'bg-[#8b5cf6]/15 text-white border-l-2 border-[#8b5cf6] pl-3 shadow-sm'
@@ -467,13 +504,14 @@ export default function Admin() {
   )
 
   return (
-    <div className="min-h-screen bg-[#07070a] flex flex-col md:flex-row">
+    <div className="min-h-screen bg-[#07070a] flex flex-col md:flex-row select-none">
       <aside className="hidden md:block w-72 shrink-0 sticky top-0 h-screen">
         {sidebarContent}
       </aside>
 
       <div className="md:hidden flex items-center justify-between p-4 border-b border-white/10 bg-[#0d0d14]">
         <button
+          type="button"
           onClick={() => setMobileSidebarOpen(true)}
           className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-semibold text-white"
         >
@@ -509,7 +547,7 @@ export default function Admin() {
         {notice && (
           <div className="mb-5 flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-200">
             <Check size={18} /> {notice}
-            <button className="ml-auto" onClick={() => setNotice('')}><X size={16} /></button>
+            <button type="button" className="ml-auto" onClick={() => setNotice('')}><X size={16} /></button>
           </div>
         )}
 
@@ -526,9 +564,9 @@ export default function Admin() {
               <StatCard icon={<Activity />} label="Visitantes Únicos Hoy" value={stats?.uniqueVisitsToday ?? '—'} accent="green" detail="ACTIVIDAD EN TIEMPO REAL" />
               <StatCard icon={<Users />} label="Usuarios Registrados" value={stats?.totalUsers ?? '—'} accent="cyan" detail="CUENTAS EN PLATAFORMA" />
               <StatCard icon={<Shield />} label="Cuentas Verificadas" value={stats ? `${stats.verifiedUsers ?? stats.totalUsers} (${stats.totalUsers ? Math.round(((stats.verifiedUsers ?? stats.totalUsers) / stats.totalUsers) * 100) : 100}%)` : '—'} accent="violet" />
-              <StatCard icon={<Code2 />} label="Proyectos Publicados" value={stats?.totalProjects ?? projects.length} accent="violet" detail="CATÁLOGO ACTIVO" onClick={() => setActiveTab('projects')} />
+              <StatCard icon={<Code2 />} label="Proyectos Publicados" value={stats?.totalProjects ?? projects.length} accent="violet" detail="CATÁLOGO ACTIVO" onClick={() => handleTabChange('projects')} />
               <StatCard icon={<Inbox />} label="Mensajes Totales" value={messages.length} accent="cyan" />
-              <StatCard icon={<Inbox />} label="Mensajes Pendientes" value={messages.filter((m) => m.status === 'unread' || !m.read).length} accent="red" detail="REQUIEREN ATENCIÓN" onClick={() => setActiveTab('messages')} />
+              <StatCard icon={<Inbox />} label="Mensajes Pendientes" value={unreadCount} accent="red" detail="REQUIEREN ATENCIÓN" onClick={() => handleTabChange('messages')} />
               <StatCard icon={<Activity />} label="Servidor & MongoDB" value="ONLINE" accent="green" detail="177MS ATLAS" />
             </div>
 
@@ -544,16 +582,16 @@ export default function Admin() {
               <div className="rounded-2xl border border-white/10 bg-[#0d0d14]/90 p-5 sm:p-6">
                 <h3 className="font-bold text-white mb-4">Acciones Rápidas</h3>
                 <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => { setEditingProject(null); setProjectForm(emptyProject); setFormSection('card'); setModalError(''); setModalOpen(true) }} className="button button-primary text-xs py-3 justify-center">
+                  <button type="button" onClick={() => { setEditingProject(null); setProjectForm(emptyProject); setFormSection('card'); setModalError(''); setModalOpen(true) }} className="button button-primary text-xs py-3 justify-center">
                     <Plus size={16} /> Crear Proyecto
                   </button>
-                  <button onClick={syncGithub} disabled={syncingGithub} className="button button-outline text-xs py-3 justify-center">
+                  <button type="button" onClick={syncGithub} disabled={syncingGithub} className="button button-outline text-xs py-3 justify-center">
                     <RefreshCw size={16} className={syncingGithub ? 'animate-spin' : ''} /> Sync GitHub
                   </button>
-                  <button onClick={exportProjectsJson} className="button button-outline text-xs py-3 justify-center">
+                  <button type="button" onClick={exportProjectsJson} className="button button-outline text-xs py-3 justify-center">
                     <Download size={16} /> Exportar Backup
                   </button>
-                  <button onClick={() => setActiveTab('messages')} className="button button-outline text-xs py-3 justify-center">
+                  <button type="button" onClick={() => handleTabChange('messages')} className="button button-outline text-xs py-3 justify-center">
                     <Mail size={16} /> Ver Mensajes
                   </button>
                 </div>
@@ -566,16 +604,16 @@ export default function Admin() {
           <section className="space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-4 bg-[#0d0d14]/90 p-4 rounded-2xl border border-white/10">
               <div className="flex flex-wrap gap-2">
-                <button onClick={() => { setEditingProject(null); setProjectForm(emptyProject); setFormSection('card'); setModalError(''); setModalOpen(true) }} className="button button-primary">
+                <button type="button" onClick={() => { setEditingProject(null); setProjectForm(emptyProject); setFormSection('card'); setModalError(''); setModalOpen(true) }} className="button button-primary">
                   <Plus size={16} /> Añadir Nuevo Proyecto
                 </button>
-                <button onClick={syncGithub} disabled={syncingGithub} className="button button-outline">
+                <button type="button" onClick={syncGithub} disabled={syncingGithub} className="button button-outline">
                   <RefreshCw size={16} className={syncingGithub ? 'animate-spin' : ''} />
                   {syncingGithub ? 'Sincronizando...' : 'Sincronizar con GitHub'}
                 </button>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={exportProjectsJson} className="button button-outline text-xs">
+                <button type="button" onClick={exportProjectsJson} className="button button-outline text-xs">
                   <Download size={15} /> Exportar JSON
                 </button>
                 <label className="button button-outline text-xs cursor-pointer">
@@ -695,11 +733,20 @@ export default function Admin() {
                   )}
 
                   <div className="flex flex-wrap gap-2">
-                    <button onClick={() => openReplyModal(item)} className="button button-primary text-xs py-2 transition-transform duration-150 active:scale-95">
+                    <button 
+                      type="button" 
+                      onClick={() => openReplyModal(item)} 
+                      className="button button-primary text-xs py-2 transition-transform duration-150 active:scale-95"
+                    >
                       <Send size={13} /> Responder con Preset
                     </button>
-                    <button onClick={() => request(`/admin/messages/${item._id}`, { method: 'DELETE' }).then(loadMessages)} className="button border border-red-400/30 text-red-300 hover:bg-red-400/10 text-xs py-2 transition-transform duration-150 active:scale-95">
-                      <Trash2 size={13} /> Eliminar
+                    <button 
+                      type="button" 
+                      disabled={deletingId === item._id}
+                      onClick={(e) => handleDeleteMessage(e, item._id)} 
+                      className="button border border-red-400/30 text-red-300 hover:bg-red-400/10 text-xs py-2 transition-transform duration-150 active:scale-95 disabled:opacity-50"
+                    >
+                      <Trash2 size={13} /> {deletingId === item._id ? 'Eliminando...' : 'Eliminar'}
                     </button>
                   </div>
                 </article>
@@ -1031,6 +1078,7 @@ export default function Admin() {
         </div>
       )}
 
+      {/* Modal de Respuestas con Presets */}
       {replyingMessage && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in duration-150"
@@ -1039,7 +1087,7 @@ export default function Admin() {
           <div className="relative w-full max-w-xl my-auto max-h-[92vh] flex flex-col rounded-3xl border border-[#8b5cf6]/40 bg-[#0d0d14] shadow-2xl overflow-hidden">
             <div className="flex items-center justify-between p-5 border-b border-white/10 shrink-0">
               <h3 className="text-base sm:text-lg font-bold text-white">Responder a {replyingMessage.name}</h3>
-              <button onClick={() => setReplyingMessage(null)} className="text-neutral-400 hover:text-white"><X size={20} /></button>
+              <button type="button" onClick={() => setReplyingMessage(null)} className="text-neutral-400 hover:text-white"><X size={20} /></button>
             </div>
             <div className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
               <div>
@@ -1072,8 +1120,8 @@ export default function Admin() {
               </label>
             </div>
             <div className="p-4 sm:p-5 border-t border-white/10 bg-[#0d0d14] flex justify-end gap-2.5 shrink-0">
-              <button onClick={() => setReplyingMessage(null)} className="button button-outline text-xs px-4 py-2">Cancelar</button>
-              <button onClick={sendReply} disabled={sendingReply} className="button button-primary text-xs px-4 py-2 transition-transform duration-150 active:scale-95 disabled:opacity-60">
+              <button type="button" onClick={() => setReplyingMessage(null)} className="button button-outline text-xs px-4 py-2">Cancelar</button>
+              <button type="button" onClick={sendReply} disabled={sendingReply} className="button button-primary text-xs px-4 py-2 transition-transform duration-150 active:scale-95 disabled:opacity-60">
                 <Send size={13} /> {sendingReply ? 'Enviando...' : 'Enviar Respuesta'}
               </button>
             </div>

@@ -84,9 +84,9 @@ export default function Profile() {
     }
   }, [user])
 
-  // Helper para headers autenticados
+  // Helper para headers autenticados con soporte para ambos tokens
   const getAuthHeaders = () => {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('token') || localStorage.getItem('panda_token') || ''
     return {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -329,7 +329,7 @@ export default function Profile() {
   )
 
   return (
-    <div className="min-h-screen bg-[#07070a] flex flex-col md:flex-row">
+    <div className="min-h-screen bg-[#07070a] flex flex-col md:flex-row select-none">
       <aside className="hidden md:block w-72 shrink-0 sticky top-0 h-screen">
         {sidebar}
       </aside>
@@ -377,7 +377,7 @@ export default function Profile() {
         {notice && (
           <div className="mb-5 flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-200">
             <Check size={18} /> {notice}
-            <button className="ml-auto" onClick={() => setNotice('')}><X size={16} /></button>
+            <button type="button" className="ml-auto" onClick={() => setNotice('')}><X size={16} /></button>
           </div>
         )}
 
@@ -746,9 +746,10 @@ export default function Profile() {
               </div>
             )}
 
-            <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-center">
+            {/* CAJA DE CLAVE MANUAL CON BREAK-ALL */}
+            <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-center overflow-hidden">
               <span className="text-[10px] font-mono text-neutral-400 block mb-1">CLAVE SECRETA:</span>
-              <code className="text-xs font-mono font-bold text-[#c4b5fd] select-all">
+              <code className="text-xs font-mono font-bold text-[#c4b5fd] select-all break-all block leading-relaxed tracking-wider">
                 {qrCodeData.base32}
               </code>
             </div>
