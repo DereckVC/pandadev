@@ -1,30 +1,12 @@
-const nodemailer = require('nodemailer');
 const dns = require('dns');
 
-// Prioriza IPv4 para evitar que la conexión se congele 40 segundos en la nube
 if (dns.setDefaultResultOrder) {
   dns.setDefaultResultOrder('ipv4first');
 }
 
-const emailUser = (process.env.EMAIL_USER || '').trim();
-const emailPass = (process.env.EMAIL_PASS || '').trim().replace(/\s+/g, '');
+const resendApiKey = (process.env.RESEND_API_KEY || '').trim();
 const frontendUrl = (process.env.FRONTEND_URL || 'https://www.pandadev.me').replace(/\/+$/, '');
-
-const sender = `"PandaDev Security" <${emailUser}>`;
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
-  auth: {
-    user: emailUser,
-    pass: emailPass,
-  },
-});
-
-transporter.verify()
-  .then(() => console.log('✓ [SMTP]: Conexión con Gmail verificada exitosamente'))
-  .catch((error) => console.error('Error enviando email:', error.message));
+const sender = 'PandaDev Security <support@pandadev.me>';
 
 const emailLayout = ({ title, intro, actionLabel, link, expiry }) => `
   <div style="margin:0;padding:32px 16px;background:#09090b;color:#f5f5f5;font-family:Arial,Helvetica,sans-serif;">
@@ -45,18 +27,32 @@ const emailLayout = ({ title, intro, actionLabel, link, expiry }) => `
 
 const sendMail = async ({ to, subject, text, html }) => {
   try {
-    await transporter.sendMail({
-      from: sender,
-      to,
-      subject,
-      text,
-      html,
-      headers: { 'X-Priority': '1', Importance: 'high', 'X-Mailer': 'PandaDev Engine' },
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${resendApiKey}`,
+      },
+      body: JSON.stringify({
+        from: sender,
+        to: [to],
+        subject,
+        text,
+        html,
+      }),
     });
-    console.log('✓ [EMAIL]: Enviado correctamente a', to);
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('❌ Error enviando email con Resend:', data);
+      return false;
+    }
+
+    console.log('✓ [EMAIL]: Enviado con éxito vía Resend a', to, 'ID:', data.id);
     return true;
   } catch (error) {
-    console.error('Error enviando email:', error.message);
+    console.error('❌ Excepción enviando email:', error.message);
     return false;
   }
 };
