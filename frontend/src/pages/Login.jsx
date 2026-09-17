@@ -4,7 +4,6 @@ import { ArrowLeft, ArrowRight, Lock, Mail, User } from 'lucide-react'
 import ProviderIcon from '../components/ProviderIcon'
 import { useAuth } from '../contexts/AuthContext'
 
-// Resuelve la URL del API para OAuth sin depender de localhost
 const getApiUrl = () => {
   const raw = import.meta.env.VITE_API_URL || '/api'
   return raw.endsWith('/api') ? raw : `${raw.replace(/\/+$/, '')}/api`
@@ -45,8 +44,8 @@ export default function Login() {
   ]
 
   return (
-    <main className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4 bg-[#07070a]">
-      <div className="w-full max-w-md bg-[#0d0d14] border border-[#8b5cf6]/30 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+    <main className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4 bg-transparent">
+      <div className="w-full max-w-md bg-[#0d0d14]/90 backdrop-blur-xl border border-[#8b5cf6]/30 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
         <Link to="/" className="inline-flex items-center gap-1.5 text-xs text-neutral-400 hover:text-white transition">
           <ArrowLeft size={14} /> Volver al Inicio
         </Link>
@@ -56,7 +55,7 @@ export default function Login() {
             {isRegister ? 'Crear Cuenta' : 'Iniciar Sesión'}
           </h1>
           <p className="text-xs text-neutral-400 mt-1">
-            {isRegister ? 'Regístrate para guardar favoritos y gestionar tu perfil' : 'Accede a tu cuenta de PandaDev'}
+            {isRegister ? 'Regístrate para gestionar tu perfil técnico' : 'Accede a tu cuenta de PandaDev'}
           </p>
         </div>
 
@@ -66,7 +65,6 @@ export default function Login() {
           </div>
         )}
 
-        {/* Botones OAuth dinámicos sin localhost */}
         <div className="grid grid-cols-3 gap-2.5">
           {oauthProviders.map((p) => (
             <a
